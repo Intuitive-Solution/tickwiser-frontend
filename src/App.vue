@@ -31,7 +31,6 @@
               placeholder="Task title" 
               required 
               class="input flex-1"
-              @keyup.enter="createTask" 
             />
             <input v-model="newTask.date" type="date" required class="input w-48" />
             <button class="btn btn-primary px-6 flex items-center gap-2" :disabled="loading || !newTask.title.trim()">
@@ -106,7 +105,7 @@ const fetchTasks = async () => {
 };
 
 const createTask = async () => {
-  console.log( "newTask:  " + newTask.value);
+  console.log( "newTask:  " + JSON.stringify(newTask.value));
   try {
     loading.value = true;
     await api.post('/tasks', newTask.value);
