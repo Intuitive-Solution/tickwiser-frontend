@@ -106,6 +106,7 @@ const fetchTasks = async () => {
 };
 
 const createTask = async () => {
+  console.log( "newTask:  " + newTask.value);
   try {
     loading.value = true;
     await api.post('/tasks', newTask.value);
