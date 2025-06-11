@@ -29,9 +29,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized access
-      console.error('Unauthorized access - redirecting to login');
-      // You could emit an event here to logout the user
+      console.error('Unauthorized access - user may need to re-authenticate');
     }
     return Promise.reject(error);
   }
