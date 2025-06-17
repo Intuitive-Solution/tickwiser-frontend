@@ -70,32 +70,32 @@
           <TabsList class="grid w-full grid-cols-5">
             <TabsTrigger value="today">
               Today
-              <Badge v-if="getTasksByTab('today').length > 0" variant="secondary" class="ml-2">
-                {{ getTasksByTab('today').length }}
+              <Badge v-if="getFilteredTaskCountByTab('today') > 0" variant="secondary" class="ml-2">
+                {{ getFilteredTaskCountByTab('today') }}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="tomorrow">
               Tomorrow
-              <Badge v-if="getTasksByTab('tomorrow').length > 0" variant="secondary" class="ml-2">
-                {{ getTasksByTab('tomorrow').length }}
+              <Badge v-if="getFilteredTaskCountByTab('tomorrow') > 0" variant="secondary" class="ml-2">
+                {{ getFilteredTaskCountByTab('tomorrow') }}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="week">
               This Week
-              <Badge v-if="getTasksByTab('week').length > 0" variant="secondary" class="ml-2">
-                {{ getTasksByTab('week').length }}
+              <Badge v-if="getFilteredTaskCountByTab('week') > 0" variant="secondary" class="ml-2">
+                {{ getFilteredTaskCountByTab('week') }}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="month">
               This Month
-              <Badge v-if="getTasksByTab('month').length > 0" variant="secondary" class="ml-2">
-                {{ getTasksByTab('month').length }}
+              <Badge v-if="getFilteredTaskCountByTab('month') > 0" variant="secondary" class="ml-2">
+                {{ getFilteredTaskCountByTab('month') }}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="year">
               This Year
-              <Badge v-if="getTasksByTab('year').length > 0" variant="secondary" class="ml-2">
-                {{ getTasksByTab('year').length }}
+              <Badge v-if="getFilteredTaskCountByTab('year') > 0" variant="secondary" class="ml-2">
+                {{ getFilteredTaskCountByTab('year') }}
               </Badge>
             </TabsTrigger>
           </TabsList>
@@ -217,11 +217,31 @@
                         </Badge>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem @click="pushToTomorrow(task)">
+                      <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
+                        <ArrowLeft class="mr-2 h-4 w-4" />
+                        Push to Today
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator v-if="activeTab !== 'today'" />
+                      <DropdownMenuItem v-if="activeTab !== 'tomorrow'" @click="pushToTomorrow(task)">
                         <ArrowRight class="mr-2 h-4 w-4" />
                         Push to Tomorrow
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
+                      <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                      <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushThisWeek(task)">
+                        <CalendarDays class="mr-2 h-4 w-4" />
+                        Push to later this week
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator v-if="activeTab !== 'week'" />
+                      <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushThisMonth(task)">
+                        <CalendarRange class="mr-2 h-4 w-4" />
+                        Push later this Month
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator v-if="activeTab !== 'month'" />
+                      <DropdownMenuItem v-if="activeTab !== 'year'" @click="pushLaterThisYear(task)">
+                        <CalendarClock class="mr-2 h-4 w-4" />
+                        Push later this Year
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator v-if="activeTab !== 'year'" />
                       <DropdownMenuItem @click="toggleStatus(task)">
                       <Check class="mr-2 h-4 w-4" />
                       {{ task.status ? 'Mark Incomplete' : 'Mark Complete' }}
@@ -272,12 +292,16 @@ import {
   Plus, 
   Search, 
   Calendar, 
+  CalendarDays,
+  CalendarRange,
+  CalendarClock,
   MoreHorizontal, 
   Check, 
   Trash2,
   Edit,
   X,
   ArrowRight,
+  ArrowLeft,
   MessageSquare,
   Pin
 } from 'lucide-vue-next'
@@ -313,9 +337,24 @@ const showComments = ref(false)
 const selectedTask = ref(null)
 
 const filteredTasks = computed(() => {
-  if (!searchQuery.value) return props.tasks
+  const today = new Date()
+  today.setHours(0, 0, 0, 0) // Reset time to start of day for accurate comparison
   
-  return props.tasks.filter(task =>
+  let tasks = props.tasks.filter(task => {
+    // Filter out completed tasks that are older than today
+    if (task.status) {
+      const taskDate = new Date(task.date)
+      taskDate.setHours(0, 0, 0, 0)
+      if (taskDate < today) {
+        return false // Hide completed tasks older than today
+      }
+    }
+    return true
+  })
+  
+  if (!searchQuery.value) return tasks
+  
+  return tasks.filter(task =>
     task.title.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 })
@@ -324,6 +363,10 @@ const filteredAndTabTasks = computed(() => {
   const searchFiltered = filteredTasks.value
   return getTasksByTab(activeTab.value, searchFiltered)
 })
+
+const getFilteredTaskCountByTab = (tab) => {
+  return getTasksByTab(tab, filteredTasks.value).length
+}
 
 const createTask = async () => {
   try {
@@ -399,11 +442,29 @@ const cancelEdit = () => {
   editForm.value = { title: '', date: '' }
 }
 
+const pushToToday = async (task) => {
+  try {
+    const today = new Date()
+    const todayDate = today.toISOString().split('T')[0]
+    
+    await api.put(`/tasks/${task.id}`, {
+      date: todayDate
+    })
+    
+    emit('task-updated')
+  } catch (error) {
+    console.error('Error pushing task to today:', error)
+  }
+}
+
 const pushToTomorrow = async (task) => {
+  console.log('date', new Date())
   try {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowDate = tomorrow.toISOString().split('T')[0]
+    console.log('tomorrow', tomorrow)
+    const tomorrowDate = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+    console.log('tomorrowDate', tomorrowDate)
     
     await api.put(`/tasks/${task.id}`, {
       date: tomorrowDate
@@ -412,6 +473,65 @@ const pushToTomorrow = async (task) => {
     emit('task-updated')
   } catch (error) {
     console.error('Error pushing task to tomorrow:', error)
+  }
+}
+
+const pushThisWeek = async (task) => {
+  try {
+    const thisWeek = new Date()
+    thisWeek.setDate(thisWeek.getDate() + 2) // Today plus two days
+    const thisWeekDate = new Date(thisWeek.getTime() - thisWeek.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+    
+    await api.put(`/tasks/${task.id}`, {
+      date: thisWeekDate
+    })
+    
+    emit('task-updated')
+  } catch (error) {
+    console.error('Error pushing task to this week:', error)
+  }
+}
+
+const pushThisMonth = async (task) => {
+  try {
+    const today = new Date()
+    const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const daysUntilNextMonday = currentDay === 0 ? 8 : (8 - currentDay) // Next Monday
+    
+    const nextMonday = new Date()
+    nextMonday.setDate(today.getDate() + daysUntilNextMonday)
+    const nextMondayDate = new Date(nextMonday.getTime() - nextMonday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+    
+    await api.put(`/tasks/${task.id}`, {
+      date: nextMondayDate
+    })
+    
+    emit('task-updated')
+  } catch (error) {
+    console.error('Error pushing task to this month:', error)
+  }
+}
+
+const pushLaterThisYear = async (task) => {
+  try {
+    const today = new Date()
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1) // First day of next month
+    
+    // Find the first Monday of next month
+    const firstDayOfMonth = nextMonth.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const daysToFirstMonday = firstDayOfMonth === 0 ? 1 : (8 - firstDayOfMonth) % 7
+    const firstMonday = new Date(nextMonth)
+    firstMonday.setDate(1 + daysToFirstMonday)
+    
+    const firstMondayDate = new Date(firstMonday.getTime() - firstMonday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+    
+    await api.put(`/tasks/${task.id}`, {
+      date: firstMondayDate
+    })
+    
+    emit('task-updated')
+  } catch (error) {
+    console.error('Error pushing task to later this year:', error)
   }
 }
 
