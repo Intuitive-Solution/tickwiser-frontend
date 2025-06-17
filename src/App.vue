@@ -3,71 +3,131 @@
     <!-- Show login component if user is not authenticated -->
     <Login v-if="!user" @authenticated="handleAuthentication" />
     
-    <!-- Show todo app if user is authenticated -->
-    <div v-else class="min-h-screen bg-gray-50 p-4">
-      <!-- Loading Spinner Overlay -->
-      <div v-if="loading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 flex items-center gap-3">
-          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
-          <span class="text-gray-700 font-medium">Processing...</span>
-        </div>
-      </div>
-
-      <header class="card mx-auto max-w-4xl mb-8 p-6">
-        <div class="flex justify-between items-center">
-          <h1 class="text-3xl font-bold text-primary-600">Todo App</h1>
-          <div class="flex items-center gap-4">
-            <span class="text-gray-600 font-medium">Welcome, {{ user.displayName || user.email }}!</span>
-            <button @click="handleLogout" class="btn btn-danger">Logout</button>
-          </div>
-        </div>
-      </header>
-
-      <div class="max-w-4xl mx-auto">
-        <form @submit.prevent="createTask" class="card p-6 mb-8">
-          <div class="flex gap-4">
-            <input 
-              v-model="newTask.title" 
-              placeholder="Task title" 
-              required 
-              class="input flex-1"
-            />
-            <input v-model="newTask.date" type="date" required class="input w-48" />
-            <button class="btn btn-primary px-6 flex items-center gap-2" :disabled="loading || !newTask.title.trim()">
-              <div v-if="loading" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              Add Task
-            </button>
-          </div>
-        </form>
-
-        <div class="card">
-          <div v-if="incompleteTasks.length === 0" class="p-12 text-center">
-            <div class="text-6xl mb-4">🎉</div>
-            <p class="text-xl text-gray-600 font-medium">All tasks completed!</p>
-            <p class="text-gray-500 mt-2">Add a new task to get started.</p>
-          </div>
+    <!-- Show main app with sidebar if user is authenticated -->
+    <div v-else class="min-h-screen bg-background">
+      <SidebarProvider>
+        <Sidebar>
+          <SidebarHeader>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton size="lg" as-child>
+                  <div class="flex items-center gap-2">
+                    <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    </div>
+                    <div class="flex flex-col gap-0.5 leading-none">
+                      <span class="font-semibold">MyTodos</span>
+                      <span class="text-xs text-muted-foreground">Task Manager</span>
+                    </div>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarHeader>
           
-          <ul v-else class="divide-y divide-gray-200">
-            <li v-for="task in incompleteTasks" :key="task.id" class="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors duration-200">
-              <input 
-                type="checkbox" 
-                v-model="task.status" 
-                @change="toggleStatus(task)" 
-                :disabled="loading"
-                class="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <div class="flex-1">
-                <span class="text-gray-900 font-medium">{{ task.title }}</span>
-                <span class="text-gray-500 ml-2">{{ formatDate(task.date) }}</span>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    :is-active="currentView === 'tasks'"
+                    @click="currentView = 'tasks'"
+                  >
+                    <CheckSquare class="h-4 w-4" />
+                    <span>Tasks</span>
+                    <SidebarMenuBadge>{{ incompleteTasks.length }}</SidebarMenuBadge>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    :is-active="currentView === 'completed'"
+                    @click="currentView = 'completed'"
+                  >
+                    <CheckCircle class="h-4 w-4" />
+                    <span>Completed</span>
+                    <SidebarMenuBadge>{{ completedTasks.length }}</SidebarMenuBadge>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton 
+                    :is-active="currentView === 'overdue'"
+                    @click="currentView = 'overdue'"
+                  >
+                    <AlertTriangle class="h-4 w-4" />
+                    <span>Overdue</span>
+                    <SidebarMenuBadge v-if="overdueTasks.length > 0" variant="destructive">
+                      {{ overdueTasks.length }}
+                    </SidebarMenuBadge>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
+          
+          <SidebarFooter>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <SidebarMenuButton>
+                      <Avatar class="h-6 w-6">
+                        <AvatarImage :src="user.photoURL" :alt="user.displayName || user.email" />
+                        <AvatarFallback>
+                          {{ getInitials(user.displayName || user.email) }}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span class="truncate">{{ user.displayName || user.email }}</span>
+                      <ChevronUp class="ml-auto h-4 w-4" />
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" class="w-[--radix-popper-anchor-width]">
+                    <DropdownMenuItem @click="handleLogout">
+                      <LogOut class="mr-2 h-4 w-4" />
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+        
+        <SidebarInset>
+          <header class="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger class="-ml-1" />
+            <Separator orientation="vertical" class="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbPage class="capitalize">{{ currentView }}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </header>
+          
+          <div class="flex flex-1 flex-col gap-4 p-4">
+            <!-- Loading Overlay -->
+            <div v-if="loading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div class="bg-background rounded-lg p-6 flex items-center gap-3">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                <span class="text-foreground font-medium">Processing...</span>
               </div>
-              <button @click="deleteTask(task.id)" class="btn btn-danger text-sm px-3 py-1 flex items-center gap-1" :disabled="loading">
-                <div v-if="loading" class="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                Delete
-              </button>
-            </li>
-          </ul>
-        </div>
-      </div>
+            </div>
+            
+            <!-- Main Content -->
+            <TasksPage 
+              :tasks="getCurrentTasks()"
+              :loading="loading"
+              @task-created="fetchTasks"
+              @task-updated="fetchTasks"
+              @task-deleted="fetchTasks"
+            />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
     </div>
   </div>
 </template>
@@ -76,21 +136,84 @@
 import { ref, onMounted, computed } from 'vue';
 import api from './services/api';
 import Login from './components/Login.vue';
+import TasksPage from './components/TasksPage.vue';
 import { onAuthStateChange, logout } from './services/firebase';
+
+// Sidebar components
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
+
+// Other UI components
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+
+// Breadcrumb components (we'll need to add these)
+const Breadcrumb = { template: '<nav class="flex" v-bind="$attrs"><slot /></nav>' };
+const BreadcrumbList = { template: '<ol class="flex items-center gap-1.5" v-bind="$attrs"><slot /></ol>' };
+const BreadcrumbItem = { template: '<li class="inline-flex items-center gap-1.5" v-bind="$attrs"><slot /></li>' };
+const BreadcrumbPage = { template: '<span class="font-normal text-foreground" v-bind="$attrs"><slot /></span>' };
+
+// Icons
+import { 
+  CheckSquare, 
+  CheckCircle, 
+  AlertTriangle, 
+  ChevronUp, 
+  LogOut 
+} from 'lucide-vue-next';
 
 const tasks = ref([]);
 const user = ref(null);
 const loading = ref(false);
-const newTask = ref({ 
-  title: '', 
-  date: new Date().toISOString().split('T')[0], 
-  status: false 
-});
+const currentView = ref('tasks');
 
-// Filter to show only incomplete tasks (status: 0 or false)
+// Computed properties for different task views
 const incompleteTasks = computed(() => {
   return tasks.value.filter(task => !task.status);
 });
+
+const completedTasks = computed(() => {
+  return tasks.value.filter(task => task.status);
+});
+
+const overdueTasks = computed(() => {
+  const today = new Date();
+  return tasks.value.filter(task => {
+    const taskDate = new Date(task.date);
+    return !task.status && taskDate < today;
+  });
+});
+
+const getCurrentTasks = () => {
+  switch (currentView.value) {
+    case 'completed':
+      return completedTasks.value;
+    case 'overdue':
+      return overdueTasks.value;
+    case 'tasks':
+    default:
+      return incompleteTasks.value;
+  }
+};
 
 const fetchTasks = async () => {
   try {
@@ -102,70 +225,6 @@ const fetchTasks = async () => {
   } finally {
     loading.value = false;
   }
-};
-
-const createTask = async () => {
-  console.log( "newTask:  " + JSON.stringify(newTask.value));
-  try {
-    loading.value = true;
-    await api.post('/tasks', newTask.value);
-    newTask.value = { 
-      title: '', 
-      date: new Date().toISOString().split('T')[0], 
-      status: false 
-    };
-    await fetchTasks();
-  } catch (error) {
-    console.error('Error creating task:', error);
-    loading.value = false;
-  }
-};
-
-const toggleStatus = async (task) => {
-  try {
-    loading.value = true;
-    await api.put(`/tasks/${task.id}`, {
-      status: task.status,
-    });
-    
-    if (task.status) {
-      playDingSound();
-    }
-    await fetchTasks();
-  } catch (error) {
-    console.error('Error updating task:', error);
-    loading.value = false;
-  }
-};
-
-const deleteTask = async (id) => {
-  try {
-    loading.value = true;
-    await api.delete(`/tasks/${id}`);
-    await fetchTasks();
-  } catch (error) {
-    console.error('Error deleting task:', error);
-    loading.value = false;
-  }
-};
-
-const playDingSound = () => {
-  // Create a simple ding sound using Web Audio API
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-  
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-  
-  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
-  
-  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-  
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + 0.3);
 };
 
 const handleAuthentication = (authenticatedUser) => {
@@ -183,13 +242,14 @@ const handleLogout = async () => {
   }
 };
 
-const formatDate = (dateString) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { 
-    weekday: 'short', 
-    month: 'short', 
-    day: 'numeric' 
-  });
+const getInitials = (name) => {
+  if (!name) return 'U';
+  return name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 };
 
 onMounted(() => {
