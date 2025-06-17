@@ -99,13 +99,16 @@
           <header class="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger class="-ml-1" />
             <Separator orientation="vertical" class="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage class="capitalize">{{ currentView }}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2 text-sm font-mono bg-muted px-3 py-1 rounded-md">
+                <Clock class="h-4 w-4 text-muted-foreground" />
+                <span class="text-muted-foreground">{{ countdown.days }}d</span>
+                <span class="text-muted-foreground">{{ countdown.hours }}h</span>
+                <span class="text-muted-foreground">{{ countdown.minutes }}m</span>
+                <span class="text-xs text-muted-foreground/70">to {{ new Date().getFullYear() + 1 }}</span>
+              </div>
+              <h1 class="text-2xl font-bold tracking-tight">Make this time count!</h1>
+            </div>
           </header>
           
           <div class="flex flex-1 flex-col gap-4 p-4">
@@ -133,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onUnmounted } from 'vue';
 import api from './services/api';
 import Login from './components/Login.vue';
 import TasksPage from './components/TasksPage.vue';
@@ -178,13 +181,23 @@ import {
   CheckCircle, 
   AlertTriangle, 
   ChevronUp, 
-  LogOut 
+  LogOut,
+  Clock
 } from 'lucide-vue-next';
 
 const tasks = ref([]);
 const user = ref(null);
 const loading = ref(false);
 const currentView = ref('tasks');
+
+// Countdown timer
+const countdown = ref({
+  days: 0,
+  hours: 0,
+  minutes: 0
+});
+
+let countdownInterval = null;
 
 // Computed properties for different task views
 const incompleteTasks = computed(() => {
@@ -252,7 +265,38 @@ const getInitials = (name) => {
     .slice(0, 2);
 };
 
+const updateCountdown = () => {
+  const now = new Date();
+  const nextYear = new Date(now.getFullYear() + 1, 0, 1); // January 1st of next year
+  const timeDiff = nextYear - now;
+  
+  if (timeDiff > 0) {
+    const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    countdown.value = { days, hours, minutes };
+  } else {
+    countdown.value = { days: 0, hours: 0, minutes: 0 };
+  }
+};
+
+const startCountdown = () => {
+  updateCountdown(); // Initial update
+  countdownInterval = setInterval(updateCountdown, 60000); // Update every minute
+};
+
+const stopCountdown = () => {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+};
+
 onMounted(() => {
+  // Start countdown timer
+  startCountdown();
+  
   // Listen for authentication state changes
   onAuthStateChange((authUser) => {
     user.value = authUser;
@@ -262,6 +306,11 @@ onMounted(() => {
       tasks.value = [];
     }
   });
+});
+
+onUnmounted(() => {
+  // Clean up countdown timer
+  stopCountdown();
 });
 </script>
 
