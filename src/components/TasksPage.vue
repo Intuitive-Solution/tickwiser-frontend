@@ -155,14 +155,25 @@
                       <X class="h-3 w-3" />
                     </Button>
                   </div>
-                  <span 
-                    v-else
-                    :class="{ 'line-through text-muted-foreground': task.status }" 
-                    class="font-medium cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
-                    @click="startEdit(task)"
-                  >
-                    {{ task.title }}
-                  </span>
+                  <div v-else class="flex items-center gap-2">
+                    <span 
+                      :class="{ 'line-through text-muted-foreground': task.status }" 
+                      class="font-medium cursor-pointer hover:bg-muted/50 px-2 py-1 rounded flex-1"
+                      @click="startEdit(task)"
+                    >
+                      {{ task.title }}
+                    </span>
+                    <Button 
+                      v-if="task.comments && task.comments.length > 0"
+                      variant="ghost" 
+                      size="sm" 
+                      class="h-6 w-6 p-0 hover:bg-muted/50"
+                      @click="openComments(task)"
+                      :title="`${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}`"
+                    >
+                      <Pin class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                    </Button>
+                  </div>
                 </div>
               </TableCell>
               <TableCell>
@@ -198,6 +209,14 @@
                         Edit Task
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem @click="openComments(task)">
+                        <MessageSquare class="mr-2 h-4 w-4" />
+                        Comments
+                        <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
+                          {{ task.comments.length }}
+                        </Badge>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem @click="pushToTomorrow(task)">
                         <ArrowRight class="mr-2 h-4 w-4" />
                         Push to Tomorrow
@@ -220,12 +239,21 @@
         </Table>
       </CardContent>
     </Card>
+
+    <!-- Task Comments Dialog -->
+    <TaskComments 
+      :task="selectedTask" 
+      :open="showComments" 
+      @update:open="showComments = $event"
+      @comments-updated="emit('refresh-tasks')"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import api from '../services/api'
+import TaskComments from './TaskComments.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -249,7 +277,9 @@ import {
   Trash2,
   Edit,
   X,
-  ArrowRight
+  ArrowRight,
+  MessageSquare,
+  Pin
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -279,6 +309,8 @@ const editForm = ref({
   title: '',
   date: ''
 })
+const showComments = ref(false)
+const selectedTask = ref(null)
 
 const filteredTasks = computed(() => {
   if (!searchQuery.value) return props.tasks
@@ -381,6 +413,11 @@ const pushToTomorrow = async (task) => {
   } catch (error) {
     console.error('Error pushing task to tomorrow:', error)
   }
+}
+
+const openComments = (task) => {
+  selectedTask.value = task
+  showComments.value = true
 }
 
 const getTasksByTab = (tab, taskList = props.tasks) => {
