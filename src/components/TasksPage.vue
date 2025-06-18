@@ -45,6 +45,16 @@
               :disabled="loading"
             />
           </div>
+          <div class="w-24">
+            <Input
+              v-model.number="newTask.priority"
+              type="number"
+              min="1"
+              max="10"
+              placeholder="Priority"
+              :disabled="loading"
+            />
+          </div>
           <Button type="submit" :disabled="loading || !newTask.title.trim()">
             <div v-if="loading" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
             Add
@@ -121,6 +131,7 @@
               <TableHead>Task</TableHead>
               <TableHead class="w-32">Due Date</TableHead>
               <TableHead class="w-24"></TableHead>
+              <TableHead class="w-20">Priority</TableHead>
               <TableHead class="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -190,6 +201,24 @@
                 <Badge :variant="getPriorityVariant(task.date)">
                   {{ getPriorityLabel(task.date) }}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                <div v-if="editingTask === task.id" class="flex items-center gap-2">
+                  <Input
+                    v-model.number="editForm.priority"
+                    type="number"
+                    min="1"
+                    max="10"
+                    class="h-8 text-sm w-16"
+                    @keyup.enter="saveEdit(task.id)"
+                    @keyup.escape="cancelEdit"
+                  />
+                </div>
+                <div v-else class="flex items-center gap-2 cursor-pointer hover:bg-muted/50 px-2 py-1 rounded" @click="startEdit(task)">
+                  <Badge :variant="getPriorityVariant(task.priority)">
+                    {{ task.priority || 5 }}
+                  </Badge>
+                </div>
               </TableCell>
               <TableCell>
                 <DropdownMenu>
@@ -322,11 +351,13 @@ const activeTab = ref('today')
 const newTask = ref({
   title: '',
   date: new Date().toISOString().split('T')[0],
-  status: false
+  status: false,
+  priority: 5
 })
 const editForm = ref({
   title: '',
-  date: ''
+  date: '',
+  priority: 5
 })
 const showComments = ref(false)
 const selectedTask = ref(null)
@@ -369,7 +400,8 @@ const createTask = async () => {
     newTask.value = {
       title: '',
       date: new Date().toISOString().split('T')[0],
-      status: false
+      status: false,
+      priority: 5
     }
     showAddTaskForm.value = false
     emit('task-created')
@@ -408,7 +440,8 @@ const startEdit = (task) => {
   editingTask.value = task.id
   editForm.value = {
     title: task.title,
-    date: task.date
+    date: task.date,
+    priority: task.priority || 5
   }
   // Focus the title input after the DOM updates
   nextTick(() => {
@@ -422,10 +455,11 @@ const saveEdit = async (taskId) => {
   try {
     await api.put(`/tasks/${taskId}`, {
       title: editForm.value.title,
-      date: editForm.value.date
+      date: editForm.value.date,
+      priority: editForm.value.priority
     })
     editingTask.value = null
-    editForm.value = { title: '', date: '' }
+    editForm.value = { title: '', date: '', priority: 5 }
     emit('task-updated')
   } catch (error) {
     console.error('Error updating task:', error)
@@ -434,7 +468,7 @@ const saveEdit = async (taskId) => {
 
 const cancelEdit = () => {
   editingTask.value = null
-  editForm.value = { title: '', date: '' }
+  editForm.value = { title: '', date: '', priority: 5 }
 }
 
 const pushToToday = async (task) => {
@@ -578,6 +612,8 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
   })
 }
 
+
+
 const isSameDay = (date1, date2) => {
   return date1.getDate() === date2.getDate() &&
          date1.getMonth() === date2.getMonth() &&
@@ -604,16 +640,13 @@ const formatDate = (dateString) => {
   })
 }
 
-const getPriorityVariant = (dateString) => {
-  const today = new Date()
-  const taskDate = new Date(dateString)
-  const diffTime = taskDate - today
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  
-  if (diffDays < 0) return 'destructive' // Overdue
-  if (diffDays === 0) return 'default' // Due today
-  if (diffDays <= 3) return 'secondary' // Due soon
-  return 'outline' // Future
+const getPriorityVariant = (priority) => {
+  const p = priority || 5
+  if (p <= 2) return 'destructive' // High priority (1-2)
+  if (p <= 4) return 'default' // Medium-high priority (3-4)
+  if (p <= 6) return 'secondary' // Medium priority (5-6)
+  if (p <= 8) return 'outline' // Low-medium priority (7-8)
+  return 'outline' // Low priority (9-10)
 }
 
 const getPriorityLabel = (dateString) => {
