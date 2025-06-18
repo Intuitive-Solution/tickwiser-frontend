@@ -120,7 +120,7 @@
               <TableHead class="w-12">Status</TableHead>
               <TableHead>Task</TableHead>
               <TableHead class="w-32">Due Date</TableHead>
-              <TableHead class="w-24">Priority</TableHead>
+              <TableHead class="w-24"></TableHead>
               <TableHead class="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>

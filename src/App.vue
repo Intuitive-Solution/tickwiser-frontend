@@ -210,9 +210,16 @@ const completedTasks = computed(() => {
 
 const overdueTasks = computed(() => {
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // Set to start of today
+  
   return tasks.value.filter(task => {
+    if (task.status) return false; // Skip completed tasks
+    
     const taskDate = new Date(task.date);
-    return !task.status && taskDate < today;
+    taskDate.setHours(0, 0, 0, 0); // Set to start of task date
+    
+    // Task is overdue if its date is before today
+    return taskDate < today;
   });
 });
 
