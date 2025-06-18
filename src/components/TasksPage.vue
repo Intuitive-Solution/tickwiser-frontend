@@ -58,12 +58,7 @@
 
     <!-- Tasks Table with Tabs -->
     <Card>
-      <CardHeader>
-        <div class="flex items-center justify-between">
-          <CardTitle>Your Tasks</CardTitle>
-          <Badge variant="secondary">{{ filteredAndTabTasks.length }} tasks</Badge>
-        </div>
-      </CardHeader>
+     
       <CardContent>
         <!-- Time-based Tabs -->
         <Tabs v-model="activeTab" class="mb-6">

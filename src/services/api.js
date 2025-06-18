@@ -13,9 +13,22 @@ api.interceptors.request.use(
       try {
         const token = await user.getIdToken();
         config.headers.Authorization = `Bearer ${token}`;
+        
+        
+        // Debug: Decode token payload to see the UID
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          }
+        } catch (decodeError) {
+          console.error('Failed to decode token:', decodeError);
+        }
       } catch (error) {
         console.error('Error getting Firebase token:', error);
       }
+    } else {
+      console.log('❌ No authenticated user found');
     }
     return config;
   },
