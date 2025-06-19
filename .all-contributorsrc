@@ -1,0 +1,10 @@
+{
+  "projectName": "tickwiser-frontend",
+  "projectOwner": "Intuitive-Solution",
+  "repoType": "github",
+  "contributors": [],
+  "files": ["CONTRIBUTORS.md"],
+  "imageSize": 100,
+  "commit": true,
+  "contributorsPerLine": 6
+}
