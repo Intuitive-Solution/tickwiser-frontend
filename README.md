@@ -1,4 +1,7 @@
-# Todo App Frontend
+[![Contributors](https://img.shields.io/github/contributors/Intuitive-Solution/tickwiser-frontend?style=flat-square)](https://github.com/Intuitive-Solution/tickwiser-frontend/graphs/contributors)
+
+
+# TickWiser Frontend
 
 A modern, responsive Todo application built with Vue 3 and Vite. This frontend connects to a Laravel backend API to manage tasks with features like task creation, completion tracking, and audio feedback.
 
