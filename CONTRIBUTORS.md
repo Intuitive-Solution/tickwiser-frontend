@@ -56,7 +56,7 @@ We welcome contributors of all skill levels:
 - AI tinkerers
 - Marketers
 
-📍 View the [TickWiser Roadmap → GitHub Projects](https://github.com/orgs/Intuitive-Solution/projects)
+📍 View the [TickWiser Roadmap → GitHub Projects](https://github.com/orgs/Intuitive-Solution/projects/2)
 
 Let’s build something meaningful together.  
 **Make This Time Count. Make TickWiser better.**
