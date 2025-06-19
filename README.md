@@ -1,5 +1,6 @@
 [![Contributors](https://img.shields.io/github/contributors/Intuitive-Solution/tickwiser-frontend?style=flat-square)](https://github.com/Intuitive-Solution/tickwiser-frontend/graphs/contributors)
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/b08d84e2-522f-422b-b3b0-13caebcf2feb/deploy-status)](https://app.netlify.com/projects/tickwiser/deploys)
 
 # TickWiser Frontend
 
