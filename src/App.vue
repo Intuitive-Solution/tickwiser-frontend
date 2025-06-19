@@ -18,8 +18,8 @@
                       </svg>
                     </div>
                     <div class="flex flex-col gap-0.5 leading-none">
-                      <span class="font-semibold">MyTodos</span>
-                      <span class="text-xs text-muted-foreground">Task Manager</span>
+                      <span class="font-semibold">TickWiser</span>
+                      <span class="text-xs text-muted-foreground">Time Management</span>
                     </div>
                   </div>
                 </SidebarMenuButton>
@@ -29,7 +29,7 @@
           
           <SidebarContent>
             <SidebarGroup>
-              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+              <SidebarGroupLabel></SidebarGroupLabel>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton 
