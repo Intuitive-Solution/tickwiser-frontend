@@ -15,7 +15,7 @@
             class="pl-8"
           />
         </div>
-        <Button @click="showAddTaskForm = !showAddTaskForm" class="shrink-0">
+        <Button @click="toggleAddTaskForm" class="shrink-0">
           <Plus class="mr-2 h-4 w-4" />
           Add Task
         </Button>
@@ -35,6 +35,8 @@
               placeholder="Enter task title..."
               required
               :disabled="loading"
+              ref="newTaskTitleInput"
+              id="new-task-title-input"
             />
           </div>
           <div class="w-40">
@@ -118,7 +120,7 @@
           <p class="text-muted-foreground mb-4">
             {{ searchQuery ? 'No tasks match your search.' : `No tasks for ${getTabLabel(activeTab)}.` }}
           </p>
-          <Button v-if="!searchQuery" @click="showAddTaskForm = true">
+          <Button v-if="!searchQuery" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
             Add Your First Task
           </Button>
@@ -355,6 +357,7 @@ const searchQuery = ref('')
 const showAddTaskForm = ref(false)
 const editingTask = ref(null)
 const editTitleInput = ref(null)
+const newTaskTitleInput = ref(null)
 const activeTab = ref('today')
 const newTask = ref({
   title: '',
@@ -729,6 +732,50 @@ const getPriorityLabel = (dateString) => {
   if (diffDays === 0) return 'Due Today'
   if (diffDays <= 3) return 'Due Soon'
   return 'Future'
+}
+
+const toggleAddTaskForm = () => {
+  const wasOpen = showAddTaskForm.value
+  showAddTaskForm.value = !showAddTaskForm.value
+  
+  // Focus the title input when form is opened (not when closing)
+  if (!wasOpen && showAddTaskForm.value) {
+    // Use both nextTick and a small timeout to ensure DOM is ready
+    nextTick(() => {
+            setTimeout(() => {
+        // Try multiple approaches to focus the input
+        let focused = false
+        
+        // Method 1: Direct ref focus
+        if (newTaskTitleInput.value && !focused) {
+          try {
+            newTaskTitleInput.value.focus()
+            focused = true
+          } catch (error) {
+            // Continue to next method
+          }
+        }
+        
+        // Method 2: Focus by ID
+        if (!focused) {
+          const inputById = document.getElementById('new-task-title-input')
+          if (inputById) {
+            inputById.focus()
+            focused = true
+          }
+        }
+        
+        // Method 3: Focus by data attribute or placeholder
+        if (!focused) {
+          const inputElement = document.querySelector('input[placeholder="Enter task title..."]')
+          if (inputElement) {
+            inputElement.focus()
+            focused = true
+          }
+        }
+      }, 50) // 50ms delay to ensure DOM is fully rendered
+    })
+  }
 }
 
 const playSuccessSound = () => {
