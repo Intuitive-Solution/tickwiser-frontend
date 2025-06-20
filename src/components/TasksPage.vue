@@ -155,6 +155,10 @@
                       @keyup.enter="saveEdit(task.id)"
                       @keyup.escape="cancelEdit"
                       ref="editTitleInput"
+                      :id="`edit-task-title-${task.id}`"
+                      @blur="handleEditInputBlur"
+                      @focus="handleEditInputFocus"
+                      autofocus
                     />
                     <Button size="sm" variant="ghost" @click="saveEdit(task.id)">
                       <Check class="h-3 w-3" />
@@ -480,11 +484,28 @@ const startEdit = (task) => {
     date: task.date,
     priority: task.priority || 5
   }
-  // Focus the title input after the DOM updates
-  nextTick(() => {
-    if (editTitleInput.value) {
-      editTitleInput.value.focus()
+  
+  // Focus the title input after the DOM updates with multiple attempts
+  const focusInput = () => {
+    const inputById = document.getElementById(`edit-task-title-${task.id}`)
+    if (inputById) {
+      inputById.focus()
+      inputById.select() // Also select all text for better UX
+      return true
     }
+    return false
+  }
+  
+  // Try focusing immediately after DOM update
+  nextTick(() => {
+    setTimeout(() => {
+      if (!focusInput()) {
+        // If first attempt fails, try again after a longer delay
+        setTimeout(() => {
+          focusInput()
+        }, 200)
+      }
+    }, 50)
   })
 }
 
@@ -531,6 +552,27 @@ const saveEdit = async (taskId) => {
 const cancelEdit = () => {
   editingTask.value = null
   editForm.value = { title: '', date: '', priority: 5 }
+}
+
+const handleEditInputFocus = () => {
+  // Input successfully focused
+}
+
+const handleEditInputBlur = (event) => {
+  // Only try to maintain focus if we're still in edit mode and focus didn't go to our buttons
+  if (editingTask.value && event.relatedTarget) {
+    const isOurButton = event.relatedTarget.closest('button') && 
+                       event.relatedTarget.closest('.flex.items-center.gap-2')
+    if (!isOurButton) {
+      // Focus was lost to something else, try to get it back
+      setTimeout(() => {
+        const input = document.getElementById(`edit-task-title-${editingTask.value}`)
+        if (input && document.activeElement !== input) {
+          input.focus()
+        }
+      }, 50)
+    }
+  }
 }
 
 const pushToToday = async (task) => {
