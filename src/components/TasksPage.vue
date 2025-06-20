@@ -75,34 +75,36 @@
       <CardContent>
         <!-- Time-based Tabs -->
         <Tabs v-model="activeTab" class="mb-6">
-          <TabsList class="grid w-full grid-cols-5">
-            <TabsTrigger value="today">
-              Today
-              <Badge v-if="getFilteredTaskCountByTab('today') > 0" variant="secondary" class="ml-2">
+          <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1">
+            <TabsTrigger value="today" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate">Today</span>
+              <Badge v-if="getFilteredTaskCountByTab('today') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('today') }}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="tomorrow">
-              Tomorrow
-              <Badge v-if="getFilteredTaskCountByTab('tomorrow') > 0" variant="secondary" class="ml-2">
+            <TabsTrigger value="tomorrow" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate">Tomorrow</span>
+              <Badge v-if="getFilteredTaskCountByTab('tomorrow') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('tomorrow') }}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="week">
-              Next Week
-              <Badge v-if="getFilteredTaskCountByTab('week') > 0" variant="secondary" class="ml-2">
+            <TabsTrigger value="week" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate sm:hidden">Week</span>
+              <span class="truncate hidden sm:inline">Next Week</span>
+              <Badge v-if="getFilteredTaskCountByTab('week') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('week') }}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="month">
-              Next Month
-              <Badge v-if="getFilteredTaskCountByTab('month') > 0" variant="secondary" class="ml-2">
+            <TabsTrigger value="month" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate sm:hidden">Month</span>
+              <span class="truncate hidden sm:inline">Next Month</span>
+              <Badge v-if="getFilteredTaskCountByTab('month') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('month') }}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="year">
-              Future
-              <Badge v-if="getFilteredTaskCountByTab('year') > 0" variant="secondary" class="ml-2">
+            <TabsTrigger value="year" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate">Future</span>
+              <Badge v-if="getFilteredTaskCountByTab('year') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('year') }}
               </Badge>
             </TabsTrigger>
@@ -128,8 +130,8 @@
           </Button>
         </div>
 
-        <Table v-else>
-          <TableHeader>
+        <Table v-else class="mt-5 sm:mt-0">
+          <TableHeader class="hidden sm:table-header-group">
             <TableRow>
               <TableHead class="w-12">Status</TableHead>
               <TableHead>Task</TableHead>
@@ -141,14 +143,180 @@
           </TableHeader>
           <TableBody>
             <TableRow v-for="task in filteredAndTabTasks" :key="task.id" :class="{ 'opacity-50': task.status, 'opacity-75 animate-pulse': task._isOptimistic }">
-              <TableCell>
+              <!-- Mobile Portrait View: Single cell spanning all columns -->
+              <TableCell colspan="6" class="sm:hidden p-3">
+                <div class="flex items-start gap-3">
+                  <!-- Checkbox -->
+                  <Checkbox
+                    :checked="task.status"
+                    @update:checked="toggleStatus(task)"
+                    :disabled="loading"
+                    class="mt-1"
+                  />
+                  
+                  <!-- Task Content -->
+                  <div class="flex-1 min-w-0">
+                    <!-- First Line: Task Title (truncated) -->
+                    <div v-if="editingTask === task.id" class="flex items-center gap-2 mb-2">
+                      <Input
+                        v-model="editForm.title"
+                        class="h-8 text-sm flex-1"
+                        @keyup.enter="saveEdit(task.id)"
+                        @keyup.escape="cancelEdit"
+                        ref="editTitleInput"
+                        :id="`edit-task-title-${task.id}`"
+                        @blur="handleEditInputBlur"
+                        @focus="handleEditInputFocus"
+                        autofocus
+                      />
+                      <Button size="sm" variant="ghost" @click="saveEdit(task.id)">
+                        <Check class="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" @click="cancelEdit">
+                        <X class="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div v-else>
+                      <!-- First Line: Title -->
+                      <div class="flex items-center gap-2 mb-1">
+                                                 <span 
+                           :class="{ 'line-through text-muted-foreground': task.status }" 
+                           class="font-medium cursor-pointer hover:bg-muted/50 px-2 py-1 rounded flex-1"
+                           @click="startEdit(task)"
+                           :title="task.title"
+                         >
+                           {{ task.title.length > 20 ? task.title.substring(0, 20) + '...' : task.title }}
+                           <span v-if="task._isOptimistic" class="ml-2 text-xs text-muted-foreground">(saving...)</span>
+                         </span>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            class="h-6 w-6 p-0 hover:bg-muted/50"
+                            @click="openComments(task)"
+                            :title="task.comments && task.comments.length > 0 ? `${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}` : 'Add comment'"
+                          >
+                            <MessageSquare class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                          </Button>
+                          <Badge 
+                            v-if="task.comments && task.comments.length > 0" 
+                            variant="secondary" 
+                            class="h-4 text-xs px-1 min-w-[16px] flex items-center justify-center"
+                          >
+                            {{ task.comments.length }}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <!-- Second Line: Date, Priority, Actions -->
+                      <div class="flex items-center justify-between text-sm text-muted-foreground">
+                        <div class="flex items-center gap-3">
+                          <div v-if="editingTask === task.id" class="flex items-center gap-2">
+                            <Input
+                              v-model="editForm.date"
+                              type="date"
+                              class="h-6 text-xs w-28"
+                              @keyup.enter="saveEdit(task.id)"
+                              @keyup.escape="cancelEdit"
+                            />
+                          </div>
+                          <div v-else class="flex items-center gap-1 cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded" @click="startEdit(task)">
+                            <Calendar class="h-3 w-3" />
+                            <span class="text-xs">{{ formatDate(task.date) }}</span>
+                          </div>
+                          
+                          
+                          
+                          <div v-if="editingTask === task.id" class="flex items-center gap-2">
+                            <Input
+                              v-model.number="editForm.priority"
+                              type="number"
+                              min="1"
+                              max="10"
+                              class="h-6 text-xs w-12"
+                              @keyup.enter="saveEdit(task.id)"
+                              @keyup.escape="cancelEdit"
+                            />
+                          </div>
+                          <div v-else class="cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded" @click="startEdit(task)">
+                            <Badge :variant="getPriorityVariant(task.priority)" class="text-xs">
+                              P{{ task.priority || 5 }}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <DropdownMenu>
+                          <DropdownMenuTrigger as-child>
+                            <Button variant="ghost" size="sm" class="h-6 w-6 p-0">
+                              <MoreHorizontal class="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem @click="startEdit(task)">
+                              <Edit class="mr-2 h-4 w-4" />
+                              Edit Task
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem @click="openComments(task)">
+                              <MessageSquare class="mr-2 h-4 w-4" />
+                              Comments
+                              <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
+                                {{ task.comments.length }}
+                              </Badge>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
+                              <ArrowLeft class="mr-2 h-4 w-4" />
+                              Push to Today
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'today'" />
+                            <DropdownMenuItem v-if="activeTab !== 'tomorrow'" @click="pushToTomorrow(task)">
+                              <ArrowRight class="mr-2 h-4 w-4" />
+                              Push to Tomorrow
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                            <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
+                              <CalendarDays class="mr-2 h-4 w-4" />
+                              Push to Next Week
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'week'" />
+                            <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
+                              <CalendarRange class="mr-2 h-4 w-4" />
+                              Push to Next Month
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'month'" />
+                            <DropdownMenuItem v-if="activeTab !== 'year'" @click="pushToFuture(task)">
+                              <CalendarClock class="mr-2 h-4 w-4" />
+                              Push to Future
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'year'" />
+                            <DropdownMenuItem @click="toggleStatus(task)">
+                              <Check class="mr-2 h-4 w-4" />
+                              {{ task.status ? 'Mark Incomplete' : 'Mark Complete' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem @click="deleteTask(task.id)" class="text-destructive">
+                              <Trash2 class="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TableCell>
+              
+              <!-- Desktop View: Traditional table cells -->
+              <TableCell class="hidden sm:table-cell">
                 <Checkbox
                   :checked="task.status"
                   @update:checked="toggleStatus(task)"
                   :disabled="loading"
                 />
               </TableCell>
-              <TableCell>
+              <TableCell class="hidden sm:table-cell">
                 <div class="flex flex-col">
                   <div v-if="editingTask === task.id" class="flex items-center gap-2">
                     <Input
@@ -199,7 +367,7 @@
                   </div>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell class="hidden sm:table-cell">
                 <div v-if="editingTask === task.id" class="flex items-center gap-2">
                   <Input
                     v-model="editForm.date"
@@ -214,12 +382,12 @@
                   <span class="text-sm">{{ formatDate(task.date) }}</span>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell class="hidden sm:table-cell">
                 <Badge :variant="getPriorityVariant(task.date)">
                   {{ getPriorityLabel(task.date) }}
                 </Badge>
               </TableCell>
-              <TableCell>
+              <TableCell class="hidden sm:table-cell">
                 <div v-if="editingTask === task.id" class="flex items-center gap-2">
                   <Input
                     v-model.number="editForm.priority"
@@ -237,7 +405,7 @@
                   </Badge>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell class="hidden sm:table-cell">
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
                     <Button variant="ghost" size="sm">
@@ -245,45 +413,45 @@
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                                          <DropdownMenuItem @click="startEdit(task)">
-                        <Edit class="mr-2 h-4 w-4" />
-                        Edit Task
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem @click="openComments(task)">
-                        <MessageSquare class="mr-2 h-4 w-4" />
-                        Comments
-                        <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
-                          {{ task.comments.length }}
-                        </Badge>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
-                        <ArrowLeft class="mr-2 h-4 w-4" />
-                        Push to Today
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator v-if="activeTab !== 'today'" />
-                      <DropdownMenuItem v-if="activeTab !== 'tomorrow'" @click="pushToTomorrow(task)">
-                        <ArrowRight class="mr-2 h-4 w-4" />
-                        Push to Tomorrow
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
-                      <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
-                        <CalendarDays class="mr-2 h-4 w-4" />
-                        Push to Next Week
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator v-if="activeTab !== 'week'" />
-                      <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
-                        <CalendarRange class="mr-2 h-4 w-4" />
-                        Push to Next Month
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator v-if="activeTab !== 'month'" />
-                      <DropdownMenuItem v-if="activeTab !== 'year'" @click="pushToFuture(task)">
-                        <CalendarClock class="mr-2 h-4 w-4" />
-                        Push to Future
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator v-if="activeTab !== 'year'" />
-                      <DropdownMenuItem @click="toggleStatus(task)">
+                    <DropdownMenuItem @click="startEdit(task)">
+                      <Edit class="mr-2 h-4 w-4" />
+                      Edit Task
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem @click="openComments(task)">
+                      <MessageSquare class="mr-2 h-4 w-4" />
+                      Comments
+                      <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
+                        {{ task.comments.length }}
+                      </Badge>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
+                      <ArrowLeft class="mr-2 h-4 w-4" />
+                      Push to Today
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'today'" />
+                    <DropdownMenuItem v-if="activeTab !== 'tomorrow'" @click="pushToTomorrow(task)">
+                      <ArrowRight class="mr-2 h-4 w-4" />
+                      Push to Tomorrow
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                    <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
+                      <CalendarDays class="mr-2 h-4 w-4" />
+                      Push to Next Week
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'week'" />
+                    <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
+                      <CalendarRange class="mr-2 h-4 w-4" />
+                      Push to Next Month
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'month'" />
+                    <DropdownMenuItem v-if="activeTab !== 'year'" @click="pushToFuture(task)">
+                      <CalendarClock class="mr-2 h-4 w-4" />
+                      Push to Future
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'year'" />
+                    <DropdownMenuItem @click="toggleStatus(task)">
                       <Check class="mr-2 h-4 w-4" />
                       {{ task.status ? 'Mark Incomplete' : 'Mark Complete' }}
                     </DropdownMenuItem>

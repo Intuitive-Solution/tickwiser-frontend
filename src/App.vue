@@ -107,7 +107,7 @@
                 <span class="text-muted-foreground">{{ countdown.minutes }}m</span>
                 <span class="text-xs text-muted-foreground/70">to {{ new Date().getFullYear() + 1 }}</span>
               </div>
-              <h1 class="text-2xl font-bold tracking-tight">Make this time count!</h1>
+              <h1 class="text-2xl font-bold tracking-tight hidden sm:block">Make this time count!</h1>
             </div>
           </header>
           
