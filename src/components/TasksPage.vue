@@ -18,6 +18,7 @@
         <Button @click="toggleAddTaskForm" class="shrink-0">
           <Plus class="mr-2 h-4 w-4" />
           Add Task
+          <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded border font-black">{{ keyboardShortcut }}</kbd>
         </Button>
       </div>
     </div>
@@ -123,6 +124,7 @@
           <Button v-if="!searchQuery" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
             Add Your First Task
+            <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded border">{{ keyboardShortcut }}</kbd>
           </Button>
         </div>
 
@@ -310,7 +312,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import api from '../services/api'
 import TaskComments from './TaskComments.vue'
 import { Button } from '@/components/ui/button'
@@ -376,6 +378,10 @@ const editForm = ref({
 })
 const showComments = ref(false)
 const selectedTask = ref(null)
+
+// Platform-aware keyboard shortcut display
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+const keyboardShortcut = isMac ? '⌘A' : 'Ctrl+A'
 
 const filteredTasks = computed(() => {
   const today = new Date()
@@ -842,6 +848,30 @@ const toggleAddTaskForm = () => {
     })
   }
 }
+
+const handleKeydown = (event) => {
+  // Ctrl+A or Cmd+A to add new task
+  if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+    event.preventDefault()
+    // Only open if not already open
+    if (!showAddTaskForm.value) {
+      toggleAddTaskForm()
+    }
+  }
+  
+  // Escape to close add task form
+  if (event.key === 'Escape' && showAddTaskForm.value) {
+    showAddTaskForm.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 
 const playSuccessSound = () => {
   try {
