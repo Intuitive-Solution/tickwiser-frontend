@@ -29,8 +29,9 @@
         <CardTitle class="text-lg">Add New Task</CardTitle>
       </CardHeader>
       <CardContent>
-        <form @submit.prevent="createTask" class="flex gap-4">
-          <div class="flex-1">
+        <form @submit.prevent="createTask" class="space-y-4">
+          <!-- Line 1: Title -->
+          <div>
             <Input
               v-model="newTask.title"
               placeholder="Enter task title..."
@@ -40,31 +41,39 @@
               id="new-task-title-input"
             />
           </div>
-          <div class="w-40">
-            <Input
-              v-model="newTask.date"
-              type="date"
-              required
-              :disabled="loading"
-            />
+          
+          <!-- Line 2: Date and Priority -->
+          <div class="flex gap-4">
+            <div class="flex-1">
+              <Input
+                v-model="newTask.date"
+                type="date"
+                required
+                :disabled="loading"
+              />
+            </div>
+            <div class="w-24">
+              <Input
+                v-model.number="newTask.priority"
+                type="number"
+                min="1"
+                max="10"
+                placeholder="Priority"
+                :disabled="loading"
+              />
+            </div>
           </div>
-          <div class="w-24">
-            <Input
-              v-model.number="newTask.priority"
-              type="number"
-              min="1"
-              max="10"
-              placeholder="Priority"
-              :disabled="loading"
-            />
+          
+          <!-- Line 3: Buttons -->
+          <div class="flex gap-2 justify-end">
+            <Button type="button" variant="outline" @click="showAddTaskForm = false">
+              Cancel
+            </Button>
+            <Button type="submit" :disabled="loading || !newTask.title.trim()">
+              <div v-if="loading" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+              Add
+            </Button>
           </div>
-          <Button type="submit" :disabled="loading || !newTask.title.trim()">
-            <div v-if="loading" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
-            Add
-          </Button>
-          <Button type="button" variant="outline" @click="showAddTaskForm = false">
-            Cancel
-          </Button>
         </form>
       </CardContent>
     </Card>
