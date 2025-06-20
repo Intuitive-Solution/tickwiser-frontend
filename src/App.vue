@@ -124,8 +124,12 @@
             <TasksPage 
               :tasks="getCurrentTasks()"
               :loading="loading"
-              @task-created="fetchTasks"
-              @task-updated="fetchTasks"
+              @task-created="handleTaskCreated"
+              @task-created-confirmed="handleTaskCreatedConfirmed"
+              @task-creation-failed="handleTaskCreationFailed"
+              @task-updated="handleTaskUpdated"
+              @task-updated-confirmed="handleTaskUpdatedConfirmed"
+              @task-update-failed="handleTaskUpdateFailed"
               @task-deleted="fetchTasks"
             />
           </div>
@@ -244,6 +248,58 @@ const fetchTasks = async () => {
     console.error('Error fetching tasks:', error);
   } finally {
     loading.value = false;
+  }
+};
+
+// Handle optimistic task creation
+const handleTaskCreated = (optimisticTask) => {
+  // Add the optimistic task immediately to the UI
+  tasks.value = [...tasks.value, optimisticTask];
+};
+
+// Handle successful task creation confirmation
+const handleTaskCreatedConfirmed = ({ tempId, realTask }) => {
+  // Replace the optimistic task with the real one from server
+  tasks.value = tasks.value.map(task => 
+    task.id === tempId ? realTask : task
+  );
+};
+
+// Handle failed task creation
+const handleTaskCreationFailed = (tempId) => {
+  // Remove the optimistic task that failed
+  tasks.value = tasks.value.filter(task => task.id !== tempId);
+};
+
+// Handle optimistic task update
+const handleTaskUpdated = (eventData) => {
+  if (eventData && eventData.taskId && eventData.optimisticTask) {
+    // Handle optimistic update
+    const taskIndex = tasks.value.findIndex(task => task.id === eventData.taskId);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = eventData.optimisticTask;
+    }
+  } else {
+    // Fallback to full refresh for legacy calls
+    fetchTasks();
+  }
+};
+
+// Handle successful task update confirmation
+const handleTaskUpdatedConfirmed = (eventData) => {
+  // Replace optimistic task with real server data
+  const taskIndex = tasks.value.findIndex(task => task.id === eventData.taskId);
+  if (taskIndex !== -1) {
+    tasks.value[taskIndex] = eventData.realTask;
+  }
+};
+
+// Handle failed task update
+const handleTaskUpdateFailed = (eventData) => {
+  // Revert to original task data
+  const taskIndex = tasks.value.findIndex(task => task.id === eventData.taskId);
+  if (taskIndex !== -1) {
+    tasks.value[taskIndex] = eventData.originalTask;
   }
 };
 

@@ -136,7 +136,7 @@
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="task in filteredAndTabTasks" :key="task.id" :class="{ 'opacity-50': task.status }">
+            <TableRow v-for="task in filteredAndTabTasks" :key="task.id" :class="{ 'opacity-50': task.status, 'opacity-75 animate-pulse': task._isOptimistic }">
               <TableCell>
                 <Checkbox
                   :checked="task.status"
@@ -168,17 +168,26 @@
                       @click="startEdit(task)"
                     >
                       {{ task.title }}
+                      <span v-if="task._isOptimistic" class="ml-2 text-xs text-muted-foreground">(saving...)</span>
                     </span>
-                    <Button 
-                      v-if="task.comments && task.comments.length > 0"
-                      variant="ghost" 
-                      size="sm" 
-                      class="h-6 w-6 p-0 hover:bg-muted/50"
-                      @click="openComments(task)"
-                      :title="`${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}`"
-                    >
-                      <Pin class="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                    </Button>
+                    <div class="flex items-center gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        class="h-6 w-6 p-0 hover:bg-muted/50"
+                        @click="openComments(task)"
+                        :title="task.comments && task.comments.length > 0 ? `${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}` : 'Add comment'"
+                      >
+                        <MessageSquare class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      </Button>
+                      <Badge 
+                        v-if="task.comments && task.comments.length > 0" 
+                        variant="secondary" 
+                        class="h-4 text-xs px-1 min-w-[16px] flex items-center justify-center"
+                      >
+                        {{ task.comments.length }}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               </TableCell>
@@ -289,7 +298,7 @@
       :task="selectedTask" 
       :open="showComments" 
       @update:open="showComments = $event"
-      @comments-updated="emit('refresh-tasks')"
+      @comments-updated="handleCommentsUpdated"
     />
   </div>
 </template>
@@ -326,8 +335,7 @@ import {
   X,
   ArrowRight,
   ArrowLeft,
-  MessageSquare,
-  Pin
+  MessageSquare
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -341,7 +349,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['refresh-tasks', 'task-created', 'task-updated', 'task-deleted'])
+const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted'])
 
 const searchQuery = ref('')
 const showAddTaskForm = ref(false)
@@ -395,19 +403,45 @@ const getFilteredTaskCountByTab = (tab) => {
 }
 
 const createTask = async () => {
+  const taskData = { ...newTask.value }
+  
+  // Generate a temporary ID for optimistic update
+  const tempId = Date.now()
+  const optimisticTask = {
+    id: tempId,
+    ...taskData,
+    comments: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    _isOptimistic: true // Flag to indicate this is an optimistic update
+  }
+  
+  // Immediately update the UI (optimistic update)
+  const currentTasks = [...props.tasks, optimisticTask]
+  emit('task-created', optimisticTask)
+  
+  // Reset form and hide it
+  newTask.value = {
+    title: '',
+    date: new Date().toISOString().split('T')[0],
+    status: false,
+    priority: 5
+  }
+  showAddTaskForm.value = false
+  playSuccessSound()
+  
+  // Make async API call in background
   try {
-    await api.post('/tasks', newTask.value)
-    newTask.value = {
-      title: '',
-      date: new Date().toISOString().split('T')[0],
-      status: false,
-      priority: 5
-    }
-    showAddTaskForm.value = false
-    emit('task-created')
-    playSuccessSound()
+    const response = await api.post('/tasks', taskData)
+    // Replace the optimistic task with the real one from server
+    emit('task-created-confirmed', { tempId, realTask: response.data })
   } catch (error) {
     console.error('Error creating task:', error)
+    // Revert the optimistic update on error
+    emit('task-creation-failed', tempId)
+    
+    // Show error to user
+    alert('Failed to create task. Please try again.')
   }
 }
 
@@ -452,17 +486,42 @@ const startEdit = (task) => {
 }
 
 const saveEdit = async (taskId) => {
+  const updateData = {
+    title: editForm.value.title,
+    date: editForm.value.date,
+    priority: editForm.value.priority
+  }
+  
+  // Store original task data for potential rollback
+  const originalTask = props.tasks.find(task => task.id === taskId)
+  if (!originalTask) return
+  
+  const optimisticTask = {
+    ...originalTask,
+    ...updateData,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId, optimisticTask, originalTask })
+  
+  // Reset edit state
+  editingTask.value = null
+  editForm.value = { title: '', date: '', priority: 5 }
+  
+  // Make async API call in background
   try {
-    await api.put(`/tasks/${taskId}`, {
-      title: editForm.value.title,
-      date: editForm.value.date,
-      priority: editForm.value.priority
-    })
-    editingTask.value = null
-    editForm.value = { title: '', date: '', priority: 5 }
-    emit('task-updated')
+    const response = await api.put(`/tasks/${taskId}`, updateData)
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId, realTask: response.data })
   } catch (error) {
     console.error('Error updating task:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId, originalTask })
+    
+    // Show error to user
+    alert('Failed to update task. Please try again.')
   }
 }
 
@@ -567,6 +626,11 @@ const pushToFuture = async (task) => {
 const openComments = (task) => {
   selectedTask.value = task
   showComments.value = true
+}
+
+const handleCommentsUpdated = () => {
+  // Refresh tasks to get updated comment counts
+  emit('task-updated')
 }
 
 const getTasksByTab = (tab, taskList = props.tasks) => {
