@@ -86,19 +86,19 @@
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="week">
-              This Week
+              Next Week
               <Badge v-if="getFilteredTaskCountByTab('week') > 0" variant="secondary" class="ml-2">
                 {{ getFilteredTaskCountByTab('week') }}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="month">
-              This Month
+              Next Month
               <Badge v-if="getFilteredTaskCountByTab('month') > 0" variant="secondary" class="ml-2">
                 {{ getFilteredTaskCountByTab('month') }}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="year">
-              This Year
+              Future
               <Badge v-if="getFilteredTaskCountByTab('year') > 0" variant="secondary" class="ml-2">
                 {{ getFilteredTaskCountByTab('year') }}
               </Badge>
@@ -251,19 +251,19 @@
                         Push to Tomorrow
                       </DropdownMenuItem>
                       <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
-                      <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushThisWeek(task)">
+                      <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
                         <CalendarDays class="mr-2 h-4 w-4" />
-                        Push to later this week
+                        Push to Next Week
                       </DropdownMenuItem>
                       <DropdownMenuSeparator v-if="activeTab !== 'week'" />
-                      <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushThisMonth(task)">
+                      <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
                         <CalendarRange class="mr-2 h-4 w-4" />
-                        Push later this Month
+                        Push to Next Month
                       </DropdownMenuItem>
                       <DropdownMenuSeparator v-if="activeTab !== 'month'" />
-                      <DropdownMenuItem v-if="activeTab !== 'year'" @click="pushLaterThisYear(task)">
+                      <DropdownMenuItem v-if="activeTab !== 'year'" @click="pushToFuture(task)">
                         <CalendarClock class="mr-2 h-4 w-4" />
-                        Push later this Year
+                        Push to Future
                       </DropdownMenuItem>
                       <DropdownMenuSeparator v-if="activeTab !== 'year'" />
                       <DropdownMenuItem @click="toggleStatus(task)">
@@ -505,27 +505,13 @@ const pushToTomorrow = async (task) => {
   }
 }
 
-const pushThisWeek = async (task) => {
-  try {
-    const thisWeek = new Date()
-    thisWeek.setDate(thisWeek.getDate() + 2) // Today plus two days
-    const thisWeekDate = new Date(thisWeek.getTime() - thisWeek.getTimezoneOffset() * 60000).toISOString().split('T')[0]
-    
-    await api.put(`/tasks/${task.id}`, {
-      date: thisWeekDate
-    })
-    
-    emit('task-updated')
-  } catch (error) {
-    console.error('Error pushing task to this week:', error)
-  }
-}
-
-const pushThisMonth = async (task) => {
+const pushNextWeek = async (task) => {
   try {
     const today = new Date()
     const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
-    const daysUntilNextMonday = currentDay === 0 ? 8 : (8 - currentDay) // Next Monday
+    
+    // Calculate days until next Monday
+    const daysUntilNextMonday = currentDay === 0 ? 1 : (8 - currentDay) // Next Monday
     
     const nextMonday = new Date()
     nextMonday.setDate(today.getDate() + daysUntilNextMonday)
@@ -537,30 +523,44 @@ const pushThisMonth = async (task) => {
     
     emit('task-updated')
   } catch (error) {
-    console.error('Error pushing task to this month:', error)
+    console.error('Error pushing task to next week:', error)
   }
 }
 
-const pushLaterThisYear = async (task) => {
+const pushNextMonth = async (task) => {
   try {
     const today = new Date()
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1) // First day of next month
-    
-    // Find the first Monday of next month
-    const firstDayOfMonth = nextMonth.getDay() // 0 = Sunday, 1 = Monday, etc.
-    const daysToFirstMonday = firstDayOfMonth === 0 ? 1 : (8 - firstDayOfMonth) % 7
-    const firstMonday = new Date(nextMonth)
-    firstMonday.setDate(1 + daysToFirstMonday)
-    
-    const firstMondayDate = new Date(firstMonday.getTime() - firstMonday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+    // Get the first day of next month
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    const nextMonthDate = new Date(nextMonth.getTime() - nextMonth.getTimezoneOffset() * 60000).toISOString().split('T')[0]
     
     await api.put(`/tasks/${task.id}`, {
-      date: firstMondayDate
+      date: nextMonthDate
     })
     
     emit('task-updated')
   } catch (error) {
-    console.error('Error pushing task to later this year:', error)
+    console.error('Error pushing task to next month:', error)
+  }
+}
+
+const pushToFuture = async (task) => {
+  try {
+    const today = new Date()
+    // Get the last day of next month
+    const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0)
+    
+    // Set to the first day after next month ends (which is the first day of the month after next)
+    const futureDate = new Date(today.getFullYear(), today.getMonth() + 2, 1)
+    const futureDateString = new Date(futureDate.getTime() - futureDate.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+    
+    await api.put(`/tasks/${task.id}`, {
+      date: futureDateString
+    })
+    
+    emit('task-updated')
+  } catch (error) {
+    console.error('Error pushing task to future:', error)
   }
 }
 
@@ -576,16 +576,22 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() - today.getDay())
-  const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  // Calculate next week (Monday to Sunday)
+  const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+  const daysUntilNextMonday = currentDay === 0 ? 1 : (8 - currentDay)
   
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  const nextWeekStart = new Date(today) // Next Monday
+  nextWeekStart.setDate(today.getDate() + daysUntilNextMonday)
   
-  const startOfYear = new Date(today.getFullYear(), 0, 1)
-  const endOfYear = new Date(today.getFullYear(), 11, 31)
+  const nextWeekEnd = new Date(nextWeekStart) // Next Sunday
+  nextWeekEnd.setDate(nextWeekStart.getDate() + 6)
+  
+  // Calculate next month (1st to end of next month)
+  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1) // First day of next month
+  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0) // Last day of next month
+  
+  // Calculate future (everything after next month)
+  const futureStart = new Date(today.getFullYear(), today.getMonth() + 2, 1) // First day after next month
   
   return taskList.filter(task => {
     const taskDate = new Date(task.date)
@@ -598,14 +604,14 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
       case 'tomorrow':
         return isSameDay(taskDate, tomorrow)
       case 'week':
-        // Show tasks due this week but exclude today/overdue and tomorrow
-        return taskDate >= startOfWeek && taskDate <= endOfWeek && taskDate > today && !isSameDay(taskDate, tomorrow)
+        // Show tasks due next week (Monday to Sunday)
+        return taskDate >= nextWeekStart && taskDate <= nextWeekEnd
       case 'month':
-        // Show tasks due this month but exclude today/overdue, tomorrow, and later this week
-        return taskDate >= startOfMonth && taskDate <= endOfMonth && taskDate > today && !isSameDay(taskDate, tomorrow) && !(taskDate >= startOfWeek && taskDate <= endOfWeek)
+        // Show tasks due next month (1st to end of next month)
+        return taskDate >= nextMonthStart && taskDate <= nextMonthEnd
       case 'year':
-        // Show tasks due this year but exclude today/overdue, tomorrow, later this week, and this month
-        return taskDate >= startOfYear && taskDate <= endOfYear && taskDate > today && !isSameDay(taskDate, tomorrow) && !(taskDate >= startOfWeek && taskDate <= endOfWeek) && !(taskDate >= startOfMonth && taskDate <= endOfMonth)
+        // Show tasks due in the future (beyond next month)
+        return taskDate >= futureStart
       default:
         return true
     }
@@ -624,9 +630,9 @@ const getTabLabel = (tab) => {
   const labels = {
     today: 'today and overdue tasks',
     tomorrow: 'tomorrow',
-    week: 'later this week',
-    month: 'this month',
-    year: 'this year'
+    week: 'next week',
+    month: 'next month',
+    year: 'future tasks'
   }
   return labels[tab] || tab
 }
