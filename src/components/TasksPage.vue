@@ -453,18 +453,41 @@ const createTask = async () => {
 }
 
 const toggleStatus = async (task) => {
+  const newStatus = !task.status
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    status: newStatus,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Play success sound immediately for better UX
+  if (newStatus) {
+    playSuccessSound()
+  }
+  
+  // Make async API call in background
   try {
-    const newStatus = !task.status
-    await api.put(`/tasks/${task.id}`, {
+    const response = await api.put(`/tasks/${task.id}`, {
       status: newStatus
     })
-    
-    if (newStatus) {
-      playSuccessSound()
-    }
-    emit('task-updated')
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
   } catch (error) {
-    console.error('Error updating task:', error)
+    console.error('Error updating task status:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to update task status. Please try again.')
   }
 }
 
