@@ -130,7 +130,9 @@
               @task-updated="handleTaskUpdated"
               @task-updated-confirmed="handleTaskUpdatedConfirmed"
               @task-update-failed="handleTaskUpdateFailed"
-              @task-deleted="fetchTasks"
+              @task-deleted="handleTaskDeleted"
+              @task-deleted-confirmed="handleTaskDeletedConfirmed"
+              @task-deletion-failed="handleTaskDeletionFailed"
             />
           </div>
         </SidebarInset>
@@ -301,6 +303,24 @@ const handleTaskUpdateFailed = (eventData) => {
   if (taskIndex !== -1) {
     tasks.value[taskIndex] = eventData.originalTask;
   }
+};
+
+// Handle optimistic task deletion
+const handleTaskDeleted = (eventData) => {
+  // Remove the task immediately from the UI
+  tasks.value = tasks.value.filter(task => task.id !== eventData.taskId);
+};
+
+// Handle successful task deletion confirmation
+const handleTaskDeletedConfirmed = (eventData) => {
+  // Task is already removed from UI, no additional action needed
+  console.log(`Task ${eventData.taskId} successfully deleted`);
+};
+
+// Handle failed task deletion
+const handleTaskDeletionFailed = (eventData) => {
+  // Restore the task that failed to delete
+  tasks.value = [...tasks.value, eventData.originalTask];
 };
 
 const handleAuthentication = (authenticatedUser) => {

@@ -305,7 +305,7 @@
                               {{ task.status ? 'Mark Incomplete' : 'Mark Complete' }}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem @click="deleteTask(task.id)" class="text-destructive">
+                            <DropdownMenuItem @click="deleteTask(task)" class="text-destructive">
                               <Trash2 class="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
@@ -465,7 +465,7 @@
                       {{ task.status ? 'Mark Incomplete' : 'Mark Complete' }}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem @click="deleteTask(task.id)" class="text-destructive">
+                    <DropdownMenuItem @click="deleteTask(task)" class="text-destructive">
                       <Trash2 class="mr-2 h-4 w-4" />
                       Delete
                     </DropdownMenuItem>
@@ -534,7 +534,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted'])
+const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted', 'task-deleted-confirmed', 'task-deletion-failed'])
 
 const searchQuery = ref('')
 const showAddTaskForm = ref(false)
@@ -674,12 +674,25 @@ const toggleStatus = async (task) => {
   }
 }
 
-const deleteTask = async (id) => {
+const deleteTask = async (task) => {
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Immediately update the UI (optimistic update) - remove task from view
+  emit('task-deleted', { taskId: task.id, originalTask })
+  
+  // Make async API call in background
   try {
-    await api.delete(`/tasks/${id}`)
-    emit('task-deleted')
+    await api.delete(`/tasks/${task.id}`)
+    // Confirm the deletion
+    emit('task-deleted-confirmed', { taskId: task.id })
   } catch (error) {
     console.error('Error deleting task:', error)
+    // Revert the optimistic update on error
+    emit('task-deletion-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to delete task. Please try again.')
   }
 }
 
