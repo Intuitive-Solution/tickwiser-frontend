@@ -795,95 +795,192 @@ const handleEditInputBlur = (event) => {
 }
 
 const pushToToday = async (task) => {
+  const today = new Date()
+  const todayDate = today.toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: todayDate,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
   try {
-    const today = new Date()
-    const todayDate = today.toISOString().split('T')[0]
-    
-    await api.put(`/tasks/${task.id}`, {
+    const response = await api.put(`/tasks/${task.id}`, {
       date: todayDate
     })
-    
-    emit('task-updated')
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
   } catch (error) {
     console.error('Error pushing task to today:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to today. Please try again.')
   }
 }
 
 const pushToTomorrow = async (task) => {
-  console.log('date', new Date())
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowDate = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: tomorrowDate,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
   try {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    console.log('tomorrow', tomorrow)
-    const tomorrowDate = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().split('T')[0]
-    console.log('tomorrowDate', tomorrowDate)
-    
-    await api.put(`/tasks/${task.id}`, {
+    const response = await api.put(`/tasks/${task.id}`, {
       date: tomorrowDate
     })
-    
-    emit('task-updated')
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
   } catch (error) {
     console.error('Error pushing task to tomorrow:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to tomorrow. Please try again.')
   }
 }
 
 const pushNextWeek = async (task) => {
+  const today = new Date()
+  const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+  
+  // Calculate days until next Monday
+  const daysUntilNextMonday = currentDay === 0 ? 1 : (8 - currentDay) // Next Monday
+  
+  const nextMonday = new Date()
+  nextMonday.setDate(today.getDate() + daysUntilNextMonday)
+  const nextMondayDate = new Date(nextMonday.getTime() - nextMonday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: nextMondayDate,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
   try {
-    const today = new Date()
-    const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
-    
-    // Calculate days until next Monday
-    const daysUntilNextMonday = currentDay === 0 ? 1 : (8 - currentDay) // Next Monday
-    
-    const nextMonday = new Date()
-    nextMonday.setDate(today.getDate() + daysUntilNextMonday)
-    const nextMondayDate = new Date(nextMonday.getTime() - nextMonday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
-    
-    await api.put(`/tasks/${task.id}`, {
+    const response = await api.put(`/tasks/${task.id}`, {
       date: nextMondayDate
     })
-    
-    emit('task-updated')
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
   } catch (error) {
     console.error('Error pushing task to next week:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to next week. Please try again.')
   }
 }
 
 const pushNextMonth = async (task) => {
+  const today = new Date()
+  // Get the first day of next month
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+  const nextMonthDate = new Date(nextMonth.getTime() - nextMonth.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: nextMonthDate,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
   try {
-    const today = new Date()
-    // Get the first day of next month
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
-    const nextMonthDate = new Date(nextMonth.getTime() - nextMonth.getTimezoneOffset() * 60000).toISOString().split('T')[0]
-    
-    await api.put(`/tasks/${task.id}`, {
+    const response = await api.put(`/tasks/${task.id}`, {
       date: nextMonthDate
     })
-    
-    emit('task-updated')
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
   } catch (error) {
     console.error('Error pushing task to next month:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to next month. Please try again.')
   }
 }
 
 const pushToFuture = async (task) => {
+  const today = new Date()
+  // Get the last day of next month
+  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0)
+  
+  // Set to the first day after next month ends (which is the first day of the month after next)
+  const futureDate = new Date(today.getFullYear(), today.getMonth() + 2, 1)
+  const futureDateString = new Date(futureDate.getTime() - futureDate.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: futureDateString,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
   try {
-    const today = new Date()
-    // Get the last day of next month
-    const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0)
-    
-    // Set to the first day after next month ends (which is the first day of the month after next)
-    const futureDate = new Date(today.getFullYear(), today.getMonth() + 2, 1)
-    const futureDateString = new Date(futureDate.getTime() - futureDate.getTimezoneOffset() * 60000).toISOString().split('T')[0]
-    
-    await api.put(`/tasks/${task.id}`, {
+    const response = await api.put(`/tasks/${task.id}`, {
       date: futureDateString
     })
-    
-    emit('task-updated')
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
   } catch (error) {
     console.error('Error pushing task to future:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to future. Please try again.')
   }
 }
 
