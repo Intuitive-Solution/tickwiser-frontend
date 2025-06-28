@@ -261,13 +261,23 @@ const countdown = ref({
 
 let countdownInterval = null;
 
+// Helper function to check if a task belongs to an active project
+const isTaskFromActiveProject = (task) => {
+  // If task has no project_id, it's a general task and should be shown
+  if (!task.project_id) return true;
+  
+  // Find the project and check if it's active
+  const project = projects.value.find(p => p.id === task.project_id);
+  return project ? project.status === 'active' : false;
+};
+
 // Computed properties for different task views
 const incompleteTasks = computed(() => {
-  return tasks.value.filter(task => !task.status);
+  return tasks.value.filter(task => !task.status && isTaskFromActiveProject(task));
 });
 
 const completedTasks = computed(() => {
-  return tasks.value.filter(task => task.status);
+  return tasks.value.filter(task => task.status && isTaskFromActiveProject(task));
 });
 
 const overdueTasks = computed(() => {
@@ -276,6 +286,7 @@ const overdueTasks = computed(() => {
   
   return tasks.value.filter(task => {
     if (task.status) return false; // Skip completed tasks
+    if (!isTaskFromActiveProject(task)) return false; // Skip tasks from inactive projects
     
     const taskDate = new Date(task.date);
     taskDate.setHours(0, 0, 0, 0); // Set to start of task date
