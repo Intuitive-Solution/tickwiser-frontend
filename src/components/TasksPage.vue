@@ -128,7 +128,7 @@
             />
           </div>
           
-          <!-- Line 2: Date and Priority -->
+          <!-- Line 2: Date, Priority, and Project (when not in project view) -->
           <div class="flex gap-4">
             <div class="flex-1">
               <Input
@@ -147,6 +147,23 @@
                 placeholder="Priority"
                 :disabled="loading"
               />
+            </div>
+            <div v-if="currentView !== 'project'" class="flex-1">
+              <Select v-model="newTask.project_id" :disabled="loading">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select project (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project</SelectItem>
+                  <SelectItem 
+                    v-for="project in activeProjects" 
+                    :key="project.id" 
+                    :value="project.id.toString()"
+                  >
+                    {{ project.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
@@ -253,24 +270,44 @@
                   <!-- Task Content -->
                   <div class="flex-1 min-w-0">
                     <!-- First Line: Task Title (truncated) -->
-                    <div v-if="editingTask === task.id" class="flex items-center gap-2 mb-2">
-                      <Input
-                        v-model="editForm.title"
-                        class="h-8 text-sm flex-1"
-                        @keyup.enter="saveEdit(task.id)"
-                        @keyup.escape="cancelEdit"
-                        ref="editTitleInput"
-                        :id="`edit-task-title-${task.id}`"
-                        @blur="handleEditInputBlur"
-                        @focus="handleEditInputFocus"
-                        autofocus
-                      />
-                      <Button size="sm" variant="ghost" @click="saveEdit(task.id)">
-                        <Check class="h-3 w-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" @click="cancelEdit">
-                        <X class="h-3 w-3" />
-                      </Button>
+                    <div v-if="editingTask === task.id" class="space-y-2 mb-2">
+                      <div class="flex items-center gap-2">
+                        <Input
+                          v-model="editForm.title"
+                          class="h-8 text-sm flex-1"
+                          @keyup.enter="saveEdit(task.id)"
+                          @keyup.escape="cancelEdit"
+                          ref="editTitleInput"
+                          :id="`edit-task-title-${task.id}`"
+                          @blur="handleEditInputBlur"
+                          @focus="handleEditInputFocus"
+                          autofocus
+                        />
+                        <Button size="sm" variant="ghost" @click="saveEdit(task.id)">
+                          <Check class="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" @click="cancelEdit">
+                          <X class="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <!-- Project Selection for Mobile Edit -->
+                      <div v-if="currentView !== 'project'" class="px-1">
+                        <Select v-model="editForm.project_id">
+                          <SelectTrigger class="h-8 text-sm">
+                            <SelectValue placeholder="Select project (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Project</SelectItem>
+                            <SelectItem 
+                              v-for="project in activeProjects" 
+                              :key="project.id" 
+                              :value="project.id.toString()"
+                            >
+                              {{ project.name }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div v-else>
                       <!-- First Line: Title -->
@@ -356,6 +393,11 @@
                               Edit Task
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem v-if="currentView !== 'project'" @click="startEdit(task)">
+                              <FolderOpen class="mr-2 h-4 w-4" />
+                              {{ task.project_id ? 'Change Project' : 'Assign to Project' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="currentView !== 'project'" />
                             <DropdownMenuItem @click="openComments(task)">
                               <MessageCircle v-if="task.comments && task.comments.length > 0" class="mr-2 h-4 w-4 text-blue-600" />
                               <MessageSquare v-else class="mr-2 h-4 w-4" />
@@ -458,11 +500,30 @@
                 </div>
               </TableCell>
               <TableCell class="hidden sm:table-cell">
-                <div v-if="getProjectName(task) && currentView !== 'project'" class="flex items-center gap-1">
+                <div v-if="editingTask === task.id && currentView !== 'project'">
+                  <Select v-model="editForm.project_id">
+                    <SelectTrigger class="h-8 text-sm w-32">
+                      <SelectValue placeholder="Project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Project</SelectItem>
+                      <SelectItem 
+                        v-for="project in activeProjects" 
+                        :key="project.id" 
+                        :value="project.id.toString()"
+                      >
+                        {{ project.name }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div v-else-if="getProjectName(task) && currentView !== 'project'" class="flex items-center gap-1 cursor-pointer hover:bg-muted/50 px-2 py-1 rounded" @click="startEdit(task)">
                   <FolderOpen class="h-4 w-4 text-muted-foreground" />
                   <span class="text-sm text-muted-foreground">{{ getProjectName(task) }}</span>
                 </div>
-                <span v-else-if="currentView === 'project'" class="text-sm text-muted-foreground">-</span>
+                <div v-else-if="currentView !== 'project'" class="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded text-center" @click="startEdit(task)">
+                  <span class="text-sm text-muted-foreground">-</span>
+                </div>
                 <span v-else class="text-sm text-muted-foreground">-</span>
               </TableCell>
               <TableCell class="hidden sm:table-cell">
@@ -516,6 +577,11 @@
                       Edit Task
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem v-if="currentView !== 'project'" @click="startEdit(task)">
+                      <FolderOpen class="mr-2 h-4 w-4" />
+                      {{ task.project_id ? 'Change Project' : 'Assign to Project' }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="currentView !== 'project'" />
                     <DropdownMenuItem @click="openComments(task)">
                       <MessageCircle v-if="task.comments && task.comments.length > 0" class="mr-2 h-4 w-4 text-blue-600" />
                       <MessageSquare v-else class="mr-2 h-4 w-4" />
@@ -594,6 +660,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   Plus, 
   Search, 
@@ -653,12 +726,14 @@ const newTask = ref({
   title: '',
   date: new Date().toISOString().split('T')[0],
   status: false,
-  priority: 5
+  priority: 5,
+  project_id: 'none'
 })
 const editForm = ref({
   title: '',
   date: '',
-  priority: 5
+  priority: 5,
+  project_id: 'none'
 })
 const showComments = ref(false)
 const selectedTask = ref(null)
@@ -778,6 +853,9 @@ const createTask = async () => {
   // If we're in project view, automatically assign the task to the selected project
   if (props.currentView === 'project' && props.selectedProject) {
     taskData.project_id = props.selectedProject.id
+  } else {
+    // Convert project_id to number or null
+    taskData.project_id = (taskData.project_id && taskData.project_id !== 'none') ? parseInt(taskData.project_id) : null
   }
   
   // Generate a temporary ID for optimistic update
@@ -801,7 +879,8 @@ const createTask = async () => {
     title: '',
     date: new Date().toISOString().split('T')[0],
     status: false,
-    priority: 5
+    priority: 5,
+    project_id: 'none'
   }
   showAddTaskForm.value = false
   playSuccessSound()
@@ -887,7 +966,8 @@ const startEdit = (task) => {
   editForm.value = {
     title: task.title,
     date: task.date,
-    priority: task.priority || 5
+    priority: task.priority || 5,
+    project_id: task.project_id ? task.project_id.toString() : 'none'
   }
   
   // Focus the title input after the DOM updates with multiple attempts
@@ -918,7 +998,8 @@ const saveEdit = async (taskId) => {
   const updateData = {
     title: editForm.value.title,
     date: editForm.value.date,
-    priority: editForm.value.priority
+    priority: editForm.value.priority,
+    project_id: (editForm.value.project_id && editForm.value.project_id !== 'none') ? parseInt(editForm.value.project_id) : null
   }
   
   // Store original task data for potential rollback
@@ -937,7 +1018,7 @@ const saveEdit = async (taskId) => {
   
   // Reset edit state
   editingTask.value = null
-  editForm.value = { title: '', date: '', priority: 5 }
+  editForm.value = { title: '', date: '', priority: 5, project_id: 'none' }
   
   // Make async API call in background
   try {
@@ -956,7 +1037,7 @@ const saveEdit = async (taskId) => {
 
 const cancelEdit = () => {
   editingTask.value = null
-  editForm.value = { title: '', date: '', priority: 5 }
+  editForm.value = { title: '', date: '', priority: 5, project_id: 'none' }
 }
 
 const handleEditInputFocus = () => {
