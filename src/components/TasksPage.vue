@@ -3,8 +3,36 @@
     <!-- Header with Add Task and Search -->
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">Tasks</h1>
-        <p class="text-muted-foreground">Manage your todo items</p>
+        <!-- Project View Header -->
+        <div class="flex items-center gap-3">
+          <FolderOpen v-if="currentView === 'project'" class="h-6 w-6 text-primary" />
+          <h1 class="text-2xl font-bold tracking-tight">
+            {{ currentView === 'project' && selectedProject ? selectedProject.name : 'Tasks' }}
+          </h1>
+          
+          <!-- Project Status Switch -->
+          <div v-if="currentView === 'project' && selectedProject" class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <Switch
+                :model-value="selectedProject.status === 'active'"
+                @update:model-value="toggleProjectStatus"
+                :disabled="projectStatusLoading"
+                class="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-red-600"
+              />
+              <span class="text-sm font-medium" :class="{
+                'text-green-700': selectedProject.status === 'active',
+                'text-red-700': selectedProject.status === 'inactive'
+              }">
+                {{ selectedProject.status === 'active' ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <p class="text-muted-foreground">
+          {{ currentView === 'project' && selectedProject 
+              ? `Manage tasks in ${selectedProject.name} project` 
+              : 'Manage your todo items' }}
+        </p>
       </div>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div class="relative flex-1 md:w-64">
@@ -15,9 +43,65 @@
             class="pl-8"
           />
         </div>
+        
+        <!-- Project Filter (only show in main task views, not in project-specific view) -->
+        <div v-if="currentView !== 'project'" class="relative">
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="outline" class="shrink-0">
+                <Filter class="mr-2 h-4 w-4" />
+                {{ getSelectedProjectsText() }}
+                <ChevronDown class="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-64">
+              <div class="flex items-center justify-between p-2 border-b">
+                <span class="font-medium text-sm">Filter by Projects</span>
+                <Button 
+                  v-if="selectedProjectFilters.length > 0" 
+                  variant="ghost" 
+                  size="sm" 
+                  @click="clearProjectFilters"
+                  class="h-6 px-2 text-xs"
+                >
+                  Clear
+                </Button>
+              </div>
+              
+              <!-- No Project Option -->
+              <DropdownMenuItem @click="toggleProjectFilter('no-project')" class="flex items-center gap-2">
+                <Check v-if="selectedProjectFilters.includes('no-project')" class="h-4 w-4 text-primary" />
+                <div v-else class="h-4 w-4"></div>
+                <span>No Project</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator v-if="activeProjects.length > 0" />
+              
+              <!-- Project Options (only active projects) -->
+              <DropdownMenuItem 
+                v-for="project in activeProjects" 
+                :key="project.id"
+                @click="toggleProjectFilter(project.id.toString())"
+                class="flex items-center gap-2"
+              >
+                <Check v-if="selectedProjectFilters.includes(project.id.toString())" class="h-4 w-4 text-primary" />
+                <div v-else class="h-4 w-4"></div>
+                <div class="flex items-center gap-2">
+                  <FolderOpen class="h-4 w-4 text-muted-foreground" />
+                  <span>{{ project.name }}</span>
+                </div>
+              </DropdownMenuItem>
+              
+              <div v-if="activeProjects.length === 0" class="p-2 text-sm text-muted-foreground text-center">
+                No active projects available
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
         <Button @click="toggleAddTaskForm" class="shrink-0">
           <Plus class="mr-2 h-4 w-4" />
-          Add Task
+          {{ currentView === 'project' && selectedProject ? 'Add Task to Project' : 'Add Task' }}
           <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded border font-black">{{ keyboardShortcut }}</kbd>
         </Button>
       </div>
@@ -26,7 +110,9 @@
     <!-- Add Task Form -->
     <Card v-if="showAddTaskForm" class="border-dashed">
       <CardHeader>
-        <CardTitle class="text-lg">Add New Task</CardTitle>
+        <CardTitle class="text-lg">
+          {{ currentView === 'project' && selectedProject ? `Add New Task to ${selectedProject.name}` : 'Add New Task' }}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <form @submit.prevent="createTask" class="space-y-4">
@@ -42,7 +128,7 @@
             />
           </div>
           
-          <!-- Line 2: Date and Priority -->
+          <!-- Line 2: Date, Priority, and Project (when not in project view) -->
           <div class="flex gap-4">
             <div class="flex-1">
               <Input
@@ -61,6 +147,23 @@
                 placeholder="Priority"
                 :disabled="loading"
               />
+            </div>
+            <div v-if="currentView !== 'project'" class="flex-1">
+              <Select v-model="newTask.project_id" :disabled="loading">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select project (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project</SelectItem>
+                  <SelectItem 
+                    v-for="project in activeProjects" 
+                    :key="project.id" 
+                    :value="project.id.toString()"
+                  >
+                    {{ project.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
@@ -134,7 +237,7 @@
           </p>
           <Button v-if="!searchQuery" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
-            Add Your First Task
+            {{ currentView === 'project' && selectedProject ? 'Add First Task to Project' : 'Add Your First Task' }}
             <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded border">{{ keyboardShortcut }}</kbd>
           </Button>
         </div>
@@ -144,6 +247,7 @@
             <TableRow>
               <TableHead class="w-12">Status</TableHead>
               <TableHead>Task</TableHead>
+              <TableHead class="w-32">Project</TableHead>
               <TableHead class="w-32">Due Date</TableHead>
               <TableHead class="w-24"></TableHead>
               <TableHead class="w-20">Priority</TableHead>
@@ -153,7 +257,7 @@
           <TableBody>
             <TableRow v-for="task in filteredAndTabTasks" :key="task.id" :class="{ 'opacity-50': task.status, 'opacity-75 animate-pulse': task._isOptimistic }">
               <!-- Mobile Portrait View: Single cell spanning all columns -->
-              <TableCell colspan="6" class="sm:hidden p-3">
+              <TableCell colspan="7" class="sm:hidden p-3">
                 <div class="flex items-start gap-3">
                   <!-- Checkbox -->
                   <Checkbox
@@ -166,24 +270,44 @@
                   <!-- Task Content -->
                   <div class="flex-1 min-w-0">
                     <!-- First Line: Task Title (truncated) -->
-                    <div v-if="editingTask === task.id" class="flex items-center gap-2 mb-2">
-                      <Input
-                        v-model="editForm.title"
-                        class="h-8 text-sm flex-1"
-                        @keyup.enter="saveEdit(task.id)"
-                        @keyup.escape="cancelEdit"
-                        ref="editTitleInput"
-                        :id="`edit-task-title-${task.id}`"
-                        @blur="handleEditInputBlur"
-                        @focus="handleEditInputFocus"
-                        autofocus
-                      />
-                      <Button size="sm" variant="ghost" @click="saveEdit(task.id)">
-                        <Check class="h-3 w-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" @click="cancelEdit">
-                        <X class="h-3 w-3" />
-                      </Button>
+                    <div v-if="editingTask === task.id" class="space-y-2 mb-2">
+                      <div class="flex items-center gap-2">
+                        <Input
+                          v-model="editForm.title"
+                          class="h-8 text-sm flex-1"
+                          @keyup.enter="saveEdit(task.id)"
+                          @keyup.escape="cancelEdit"
+                          ref="editTitleInput"
+                          :id="`edit-task-title-${task.id}`"
+                          @blur="handleEditInputBlur"
+                          @focus="handleEditInputFocus"
+                          autofocus
+                        />
+                        <Button size="sm" variant="ghost" @click="saveEdit(task.id)">
+                          <Check class="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" @click="cancelEdit">
+                          <X class="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <!-- Project Selection for Mobile Edit -->
+                      <div v-if="currentView !== 'project'" class="px-1">
+                        <Select v-model="editForm.project_id">
+                          <SelectTrigger class="h-8 text-sm">
+                            <SelectValue placeholder="Select project (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Project</SelectItem>
+                            <SelectItem 
+                              v-for="project in activeProjects" 
+                              :key="project.id" 
+                              :value="project.id.toString()"
+                            >
+                              {{ project.name }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div v-else>
                       <!-- First Line: Title -->
@@ -203,17 +327,19 @@
                             size="sm" 
                             class="h-6 w-6 p-0 hover:bg-muted/50"
                             @click="openComments(task)"
-                            :title="task.comments && task.comments.length > 0 ? `${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}` : 'Add comment'"
+                            :title="task.comments && task.comments.length > 0 ? 'View comments' : 'Add comment'"
                           >
-                            <MessageSquare class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                            <MessageCircle v-if="task.comments && task.comments.length > 0" class="h-3 w-3 text-blue-600 hover:text-blue-700" />
+                            <MessageSquare v-else class="h-3 w-3 text-muted-foreground hover:text-foreground" />
                           </Button>
-                          <Badge 
-                            v-if="task.comments && task.comments.length > 0" 
-                            variant="secondary" 
-                            class="h-4 text-xs px-1 min-w-[16px] flex items-center justify-center"
-                          >
-                            {{ task.comments.length }}
-                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <!-- Project Line (if task has project) -->
+                      <div v-if="getProjectName(task) && currentView !== 'project'" class="mb-1 px-2">
+                        <div class="flex items-center gap-1">
+                          <FolderOpen class="h-3 w-3 text-muted-foreground" />
+                          <span class="text-xs text-muted-foreground">{{ getProjectName(task) }}</span>
                         </div>
                       </div>
                       
@@ -267,12 +393,15 @@
                               Edit Task
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem v-if="currentView !== 'project'" @click="startEdit(task)">
+                              <FolderOpen class="mr-2 h-4 w-4" />
+                              {{ task.project_id ? 'Change Project' : 'Assign to Project' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="currentView !== 'project'" />
                             <DropdownMenuItem @click="openComments(task)">
-                              <MessageSquare class="mr-2 h-4 w-4" />
+                              <MessageCircle v-if="task.comments && task.comments.length > 0" class="mr-2 h-4 w-4 text-blue-600" />
+                              <MessageSquare v-else class="mr-2 h-4 w-4" />
                               Comments
-                              <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
-                                {{ task.comments.length }}
-                              </Badge>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
@@ -361,20 +490,41 @@
                         size="sm" 
                         class="h-6 w-6 p-0 hover:bg-muted/50"
                         @click="openComments(task)"
-                        :title="task.comments && task.comments.length > 0 ? `${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}` : 'Add comment'"
+                        :title="task.comments && task.comments.length > 0 ? 'View comments' : 'Add comment'"
                       >
-                        <MessageSquare class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        <MessageCircle v-if="task.comments && task.comments.length > 0" class="h-3 w-3 text-blue-600 hover:text-blue-700" />
+                        <MessageSquare v-else class="h-3 w-3 text-muted-foreground hover:text-foreground" />
                       </Button>
-                      <Badge 
-                        v-if="task.comments && task.comments.length > 0" 
-                        variant="secondary" 
-                        class="h-4 text-xs px-1 min-w-[16px] flex items-center justify-center"
-                      >
-                        {{ task.comments.length }}
-                      </Badge>
                     </div>
                   </div>
                 </div>
+              </TableCell>
+              <TableCell class="hidden sm:table-cell">
+                <div v-if="editingTask === task.id && currentView !== 'project'">
+                  <Select v-model="editForm.project_id">
+                    <SelectTrigger class="h-8 text-sm w-32">
+                      <SelectValue placeholder="Project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Project</SelectItem>
+                      <SelectItem 
+                        v-for="project in activeProjects" 
+                        :key="project.id" 
+                        :value="project.id.toString()"
+                      >
+                        {{ project.name }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div v-else-if="getProjectName(task) && currentView !== 'project'" class="flex items-center gap-1 cursor-pointer hover:bg-muted/50 px-2 py-1 rounded" @click="startEdit(task)">
+                  <FolderOpen class="h-4 w-4 text-muted-foreground" />
+                  <span class="text-sm text-muted-foreground">{{ getProjectName(task) }}</span>
+                </div>
+                <div v-else-if="currentView !== 'project'" class="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded text-center" @click="startEdit(task)">
+                  <span class="text-sm text-muted-foreground">-</span>
+                </div>
+                <span v-else class="text-sm text-muted-foreground">-</span>
               </TableCell>
               <TableCell class="hidden sm:table-cell">
                 <div v-if="editingTask === task.id" class="flex items-center gap-2">
@@ -427,12 +577,15 @@
                       Edit Task
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem v-if="currentView !== 'project'" @click="startEdit(task)">
+                      <FolderOpen class="mr-2 h-4 w-4" />
+                      {{ task.project_id ? 'Change Project' : 'Assign to Project' }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="currentView !== 'project'" />
                     <DropdownMenuItem @click="openComments(task)">
-                      <MessageSquare class="mr-2 h-4 w-4" />
+                      <MessageCircle v-if="task.comments && task.comments.length > 0" class="mr-2 h-4 w-4 text-blue-600" />
+                      <MessageSquare v-else class="mr-2 h-4 w-4" />
                       Comments
-                      <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
-                        {{ task.comments.length }}
-                      </Badge>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
@@ -489,7 +642,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import api from '../services/api'
 import TaskComments from './TaskComments.vue'
 import { Button } from '@/components/ui/button'
@@ -498,6 +651,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -506,6 +660,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   Plus, 
   Search, 
@@ -520,7 +681,12 @@ import {
   X,
   ArrowRight,
   ArrowLeft,
-  MessageSquare
+  MessageSquare,
+  MessageCircle,
+  FolderOpen,
+  ChevronLeft,
+  Filter,
+  ChevronDown
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -528,15 +694,29 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  projects: {
+    type: Array,
+    default: () => []
+  },
   loading: {
     type: Boolean,
     default: false
+  },
+  currentView: {
+    type: String,
+    default: 'tasks'
+  },
+  selectedProject: {
+    type: Object,
+    default: null
   }
 })
 
-const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted', 'task-deleted-confirmed', 'task-deletion-failed'])
+const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted', 'task-deleted-confirmed', 'task-deletion-failed', 'back-to-tasks', 'project-status-updated'])
 
 const searchQuery = ref('')
+const selectedProjectFilters = ref([])
+const showProjectFilter = ref(false)
 const showAddTaskForm = ref(false)
 const editingTask = ref(null)
 const editTitleInput = ref(null)
@@ -546,19 +726,79 @@ const newTask = ref({
   title: '',
   date: new Date().toISOString().split('T')[0],
   status: false,
-  priority: 5
+  priority: 5,
+  project_id: 'none'
 })
 const editForm = ref({
   title: '',
   date: '',
-  priority: 5
+  priority: 5,
+  project_id: 'none'
 })
 const showComments = ref(false)
 const selectedTask = ref(null)
+const projectStatusLoading = ref(false)
 
 // Platform-aware keyboard shortcut display
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
 const keyboardShortcut = isMac ? '⌘A' : 'Ctrl+A'
+
+// Helper function to get project name for a task
+const getProjectName = (task) => {
+  if (!task.project_id) return null
+  const project = props.projects.find(p => p.id === task.project_id)
+  return project ? project.name : null
+}
+
+// Computed property for active projects only
+const activeProjects = computed(() => {
+  return props.projects.filter(p => p.status === 'active')
+})
+
+// Watch for changes in projects and clean up invalid filters
+watch(() => props.projects, () => {
+  // Remove any selected project filters that are no longer active
+  const activeProjectIds = activeProjects.value.map(p => p.id.toString())
+  selectedProjectFilters.value = selectedProjectFilters.value.filter(id => 
+    id === 'no-project' || activeProjectIds.includes(id)
+  )
+}, { immediate: true })
+
+// Helper functions for project filter
+const toggleProjectFilter = (projectId) => {
+  const index = selectedProjectFilters.value.indexOf(projectId)
+  if (index > -1) {
+    selectedProjectFilters.value.splice(index, 1)
+  } else {
+    selectedProjectFilters.value.push(projectId)
+  }
+}
+
+const clearProjectFilters = () => {
+  selectedProjectFilters.value = []
+}
+
+const getSelectedProjectsText = () => {
+  if (selectedProjectFilters.value.length === 0) {
+    return 'All Projects'
+  }
+  
+  const projectNames = selectedProjectFilters.value.map(id => {
+    if (id === 'no-project') return 'No Project'
+    const project = activeProjects.value.find(p => p.id.toString() === id)
+    return project ? project.name : 'Unknown'
+  }).filter(name => name !== 'Unknown') // Filter out unknown projects (inactive ones)
+  
+  if (projectNames.length === 0) {
+    return 'All Projects' // Fallback if all selected projects became inactive
+  } else if (projectNames.length === 1) {
+    return projectNames[0]
+  } else if (projectNames.length === 2) {
+    return `${projectNames[0]} and ${projectNames[1]}`
+  } else {
+    return `${projectNames[0]} and ${projectNames.length - 1} more`
+  }
+}
 
 const filteredTasks = computed(() => {
   const today = new Date()
@@ -576,11 +816,26 @@ const filteredTasks = computed(() => {
     return true
   })
   
-  if (!searchQuery.value) return tasks
+  // Apply project filter
+  if (selectedProjectFilters.value.length > 0) {
+    tasks = tasks.filter(task => {
+      // If task has no project_id, check if "No Project" is selected
+      if (!task.project_id) {
+        return selectedProjectFilters.value.includes('no-project')
+      }
+      // Otherwise check if the task's project is selected
+      return selectedProjectFilters.value.includes(task.project_id.toString())
+    })
+  }
   
-  return tasks.filter(task =>
-    task.title.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+  // Apply search filter
+  if (searchQuery.value) {
+    tasks = tasks.filter(task =>
+      task.title.toLowerCase().includes(searchQuery.value.toLowerCase())
+    )
+  }
+  
+  return tasks
 })
 
 const filteredAndTabTasks = computed(() => {
@@ -595,12 +850,21 @@ const getFilteredTaskCountByTab = (tab) => {
 const createTask = async () => {
   const taskData = { ...newTask.value }
   
+  // If we're in project view, automatically assign the task to the selected project
+  if (props.currentView === 'project' && props.selectedProject) {
+    taskData.project_id = props.selectedProject.id
+  } else {
+    // Convert project_id to number or null
+    taskData.project_id = (taskData.project_id && taskData.project_id !== 'none') ? parseInt(taskData.project_id) : null
+  }
+  
   // Generate a temporary ID for optimistic update
   const tempId = Date.now()
   const optimisticTask = {
     id: tempId,
     ...taskData,
     comments: [],
+    project: props.selectedProject || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     _isOptimistic: true // Flag to indicate this is an optimistic update
@@ -615,7 +879,8 @@ const createTask = async () => {
     title: '',
     date: new Date().toISOString().split('T')[0],
     status: false,
-    priority: 5
+    priority: 5,
+    project_id: 'none'
   }
   showAddTaskForm.value = false
   playSuccessSound()
@@ -701,7 +966,8 @@ const startEdit = (task) => {
   editForm.value = {
     title: task.title,
     date: task.date,
-    priority: task.priority || 5
+    priority: task.priority || 5,
+    project_id: task.project_id ? task.project_id.toString() : 'none'
   }
   
   // Focus the title input after the DOM updates with multiple attempts
@@ -732,7 +998,8 @@ const saveEdit = async (taskId) => {
   const updateData = {
     title: editForm.value.title,
     date: editForm.value.date,
-    priority: editForm.value.priority
+    priority: editForm.value.priority,
+    project_id: (editForm.value.project_id && editForm.value.project_id !== 'none') ? parseInt(editForm.value.project_id) : null
   }
   
   // Store original task data for potential rollback
@@ -751,7 +1018,7 @@ const saveEdit = async (taskId) => {
   
   // Reset edit state
   editingTask.value = null
-  editForm.value = { title: '', date: '', priority: 5 }
+  editForm.value = { title: '', date: '', priority: 5, project_id: 'none' }
   
   // Make async API call in background
   try {
@@ -770,7 +1037,7 @@ const saveEdit = async (taskId) => {
 
 const cancelEdit = () => {
   editingTask.value = null
-  editForm.value = { title: '', date: '', priority: 5 }
+  editForm.value = { title: '', date: '', priority: 5, project_id: 'none' }
 }
 
 const handleEditInputFocus = () => {
@@ -1159,6 +1426,28 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
+
+const toggleProjectStatus = async (isActive) => {
+  if (!props.selectedProject || projectStatusLoading.value) return
+  
+  const newStatus = isActive ? 'active' : 'inactive'
+  
+  try {
+    projectStatusLoading.value = true
+    const response = await api.put(`/projects/${props.selectedProject.id}`, {
+      status: newStatus
+    })
+    
+    // Emit the updated project to parent component
+    emit('project-status-updated', response.data)
+    
+  } catch (error) {
+    console.error('Error updating project status:', error)
+    alert('Failed to update project status. Please try again.')
+  } finally {
+    projectStatusLoading.value = false
+  }
+}
 
 const playSuccessSound = () => {
   try {

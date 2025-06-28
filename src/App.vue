@@ -65,6 +65,43 @@
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel>
+                <div class="flex items-center justify-between w-full">
+                  <h2 
+                    class="text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
+                    @click="openProjectsManagement"
+                    title="Manage all projects"
+                  >
+                    Projects
+                  </h2>
+                  <SidebarMenuButton 
+                    size="sm" 
+                    class="h-6 w-6 p-0 hover:bg-muted/50 ml-2"
+                    @click="handleAddProject"
+                    title="Add Project"
+                  >
+                    <Plus class="h-3 w-3" />
+                  </SidebarMenuButton>
+                </div>
+              </SidebarGroupLabel>
+              <SidebarMenu>
+                <SidebarMenuItem v-for="project in activeProjects" :key="project.id">
+                  <SidebarMenuButton 
+                    :is-active="currentView === 'project' && selectedProject?.id === project.id"
+                    @click="openProjectTasks(project)"
+                  >
+                    <FolderOpen class="h-4 w-4" />
+                    <span>{{ project.name }}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem v-if="activeProjects.length === 0">
+                  <div class="px-2 py-1 text-sm text-muted-foreground">
+                    No active projects
+                  </div>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
           </SidebarContent>
           
           <SidebarFooter>
@@ -122,8 +159,12 @@
             
             <!-- Main Content -->
             <TasksPage 
+              v-if="currentView !== 'projects-management'"
               :tasks="getCurrentTasks()"
+              :projects="projects"
               :loading="loading"
+              :current-view="currentView"
+              :selected-project="selectedProject"
               @task-created="handleTaskCreated"
               @task-created-confirmed="handleTaskCreatedConfirmed"
               @task-creation-failed="handleTaskCreationFailed"
@@ -133,10 +174,29 @@
               @task-deleted="handleTaskDeleted"
               @task-deleted-confirmed="handleTaskDeletedConfirmed"
               @task-deletion-failed="handleTaskDeletionFailed"
+              @back-to-tasks="currentView = 'tasks'; selectedProject = null"
+              @project-status-updated="handleProjectStatusUpdated"
+            />
+            
+            <ProjectsManagement 
+              v-if="currentView === 'projects-management'"
+              :projects="projects"
+              :tasks="tasks"
+              :loading="loading"
+              @project-status-updated="handleProjectStatusUpdated"
+              @add-project="handleAddProject"
+              @view-project="openProjectTasks"
             />
           </div>
         </SidebarInset>
       </SidebarProvider>
+      
+      <!-- Add Project Modal -->
+      <AddProjectModal 
+        :open="showAddProjectModal"
+        @update:open="showAddProjectModal = $event"
+        @project-created="handleProjectCreated"
+      />
     </div>
   </div>
 </template>
@@ -146,6 +206,8 @@ import { ref, onMounted, computed, onUnmounted } from 'vue';
 import api from './services/api';
 import Login from './components/Login.vue';
 import TasksPage from './components/TasksPage.vue';
+import AddProjectModal from './components/AddProjectModal.vue';
+import ProjectsManagement from './components/ProjectsManagement.vue';
 import { onAuthStateChange, logout } from './services/firebase';
 
 // Sidebar components
@@ -188,13 +250,18 @@ import {
   AlertTriangle, 
   ChevronUp, 
   LogOut,
-  Clock
+  Clock,
+  Plus,
+  FolderOpen
 } from 'lucide-vue-next';
 
 const tasks = ref([]);
+const projects = ref([]);
 const user = ref(null);
 const loading = ref(false);
 const currentView = ref('tasks');
+const showAddProjectModal = ref(false);
+const selectedProject = ref(null);
 
 // Countdown timer
 const countdown = ref({
@@ -205,13 +272,28 @@ const countdown = ref({
 
 let countdownInterval = null;
 
+// Helper function to check if a task belongs to an active project
+const isTaskFromActiveProject = (task) => {
+  // If task has no project_id, it's a general task and should be shown
+  if (!task.project_id) return true;
+  
+  // Find the project and check if it's active
+  const project = projects.value.find(p => p.id === task.project_id);
+  return project ? project.status === 'active' : false;
+};
+
+// Computed property for active projects only
+const activeProjects = computed(() => {
+  return projects.value.filter(project => project.status === 'active');
+});
+
 // Computed properties for different task views
 const incompleteTasks = computed(() => {
-  return tasks.value.filter(task => !task.status);
+  return tasks.value.filter(task => !task.status && isTaskFromActiveProject(task));
 });
 
 const completedTasks = computed(() => {
-  return tasks.value.filter(task => task.status);
+  return tasks.value.filter(task => task.status && isTaskFromActiveProject(task));
 });
 
 const overdueTasks = computed(() => {
@@ -220,6 +302,7 @@ const overdueTasks = computed(() => {
   
   return tasks.value.filter(task => {
     if (task.status) return false; // Skip completed tasks
+    if (!isTaskFromActiveProject(task)) return false; // Skip tasks from inactive projects
     
     const taskDate = new Date(task.date);
     taskDate.setHours(0, 0, 0, 0); // Set to start of task date
@@ -229,12 +312,21 @@ const overdueTasks = computed(() => {
   });
 });
 
+const projectTasks = computed(() => {
+  if (!selectedProject.value) return [];
+  return tasks.value.filter(task => task.project_id === selectedProject.value.id);
+});
+
 const getCurrentTasks = () => {
   switch (currentView.value) {
     case 'completed':
       return completedTasks.value;
     case 'overdue':
       return overdueTasks.value;
+    case 'project':
+      return projectTasks.value;
+    case 'projects-management':
+      return []; // No tasks needed for projects management view
     case 'tasks':
     default:
       return incompleteTasks.value;
@@ -250,6 +342,15 @@ const fetchTasks = async () => {
     console.error('Error fetching tasks:', error);
   } finally {
     loading.value = false;
+  }
+};
+
+const fetchProjects = async () => {
+  try {
+    const res = await api.get('/projects');
+    projects.value = res.data;
+  } catch (error) {
+    console.error('Error fetching projects:', error);
   }
 };
 
@@ -326,6 +427,7 @@ const handleTaskDeletionFailed = (eventData) => {
 const handleAuthentication = (authenticatedUser) => {
   user.value = authenticatedUser;
   fetchTasks();
+  fetchProjects();
 };
 
 const handleLogout = async () => {
@@ -333,10 +435,65 @@ const handleLogout = async () => {
     await logout();
     user.value = null;
     tasks.value = [];
+    projects.value = [];
   } catch (error) {
     console.error('Logout error:', error);
   }
 };
+
+const handleAddProject = () => {
+  showAddProjectModal.value = true;
+};
+
+const handleProjectCreated = (newProject) => {
+  projects.value.unshift(newProject);
+  console.log('Project created:', newProject);
+};
+
+const openProjectTasks = (project) => {
+  selectedProject.value = project;
+  currentView.value = 'project';
+};
+
+const openProjectsManagement = () => {
+  currentView.value = 'projects-management';
+  selectedProject.value = null;
+};
+
+const handleProjectStatusUpdated = async (projectIdOrProject, newStatus = null) => {
+  try {
+    let updatedProject;
+    
+    if (typeof projectIdOrProject === 'object') {
+      // Called from TasksPage with full project object
+      updatedProject = projectIdOrProject;
+    } else {
+      // Called from ProjectsManagement with projectId and newStatus
+      loading.value = true;
+      const response = await api.put(`/projects/${projectIdOrProject}`, {
+        status: newStatus
+      });
+      updatedProject = response.data;
+    }
+    
+    // Update the project in the projects list
+    const projectIndex = projects.value.findIndex(p => p.id === updatedProject.id);
+    if (projectIndex !== -1) {
+      projects.value[projectIndex] = updatedProject;
+    }
+    
+    // Update the selected project if it's the same one
+    if (selectedProject.value && selectedProject.value.id === updatedProject.id) {
+      selectedProject.value = updatedProject;
+    }
+  } catch (error) {
+    console.error('Error updating project status:', error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+
 
 const getInitials = (name) => {
   if (!name) return 'U';
@@ -385,8 +542,10 @@ onMounted(() => {
     user.value = authUser;
     if (authUser) {
       fetchTasks();
+      fetchProjects();
     } else {
       tasks.value = [];
+      projects.value = [];
     }
   });
 });
