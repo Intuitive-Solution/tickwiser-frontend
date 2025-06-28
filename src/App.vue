@@ -80,26 +80,18 @@
                 </div>
               </SidebarGroupLabel>
               <SidebarMenu>
-                <SidebarMenuItem v-for="project in projects" :key="project.id">
+                <SidebarMenuItem v-for="project in activeProjects" :key="project.id">
                   <SidebarMenuButton 
                     :is-active="currentView === 'project' && selectedProject?.id === project.id"
                     @click="openProjectTasks(project)"
-                    :class="{ 'opacity-50': project.status === 'inactive' }"
                   >
                     <FolderOpen class="h-4 w-4" />
                     <span>{{ project.name }}</span>
-                    <SidebarMenuBadge 
-                      v-if="project.status === 'inactive'" 
-                      variant="secondary"
-                      class="text-xs"
-                    >
-                      Inactive
-                    </SidebarMenuBadge>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem v-if="projects.length === 0">
+                <SidebarMenuItem v-if="activeProjects.length === 0">
                   <div class="px-2 py-1 text-sm text-muted-foreground">
-                    No projects yet
+                    No active projects
                   </div>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -271,6 +263,11 @@ const isTaskFromActiveProject = (task) => {
   const project = projects.value.find(p => p.id === task.project_id);
   return project ? project.status === 'active' : false;
 };
+
+// Computed property for active projects only
+const activeProjects = computed(() => {
+  return projects.value.filter(project => project.status === 'active');
+});
 
 // Computed properties for different task views
 const incompleteTasks = computed(() => {
