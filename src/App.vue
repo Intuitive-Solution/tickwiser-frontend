@@ -68,7 +68,13 @@
             <SidebarGroup>
               <SidebarGroupLabel>
                 <div class="flex items-center justify-between w-full">
-                  <h2 class="text-lg font-semibold">Projects</h2>
+                  <h2 
+                    class="text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
+                    @click="openProjectsManagement"
+                    title="Manage all projects"
+                  >
+                    Projects
+                  </h2>
                   <SidebarMenuButton 
                     size="sm" 
                     class="h-6 w-6 p-0 hover:bg-muted/50 ml-2"
@@ -153,6 +159,7 @@
             
             <!-- Main Content -->
             <TasksPage 
+              v-if="currentView !== 'projects-management'"
               :tasks="getCurrentTasks()"
               :projects="projects"
               :loading="loading"
@@ -169,6 +176,16 @@
               @task-deletion-failed="handleTaskDeletionFailed"
               @back-to-tasks="currentView = 'tasks'; selectedProject = null"
               @project-status-updated="handleProjectStatusUpdated"
+            />
+            
+            <ProjectsManagement 
+              v-if="currentView === 'projects-management'"
+              :projects="projects"
+              :tasks="tasks"
+              :loading="loading"
+              @project-status-updated="handleProjectStatusUpdated"
+              @add-project="handleAddProject"
+              @view-project="openProjectTasks"
             />
           </div>
         </SidebarInset>
@@ -190,6 +207,7 @@ import api from './services/api';
 import Login from './components/Login.vue';
 import TasksPage from './components/TasksPage.vue';
 import AddProjectModal from './components/AddProjectModal.vue';
+import ProjectsManagement from './components/ProjectsManagement.vue';
 import { onAuthStateChange, logout } from './services/firebase';
 
 // Sidebar components
@@ -307,6 +325,8 @@ const getCurrentTasks = () => {
       return overdueTasks.value;
     case 'project':
       return projectTasks.value;
+    case 'projects-management':
+      return []; // No tasks needed for projects management view
     case 'tasks':
     default:
       return incompleteTasks.value;
@@ -435,16 +455,41 @@ const openProjectTasks = (project) => {
   currentView.value = 'project';
 };
 
-const handleProjectStatusUpdated = (updatedProject) => {
-  // Update the project in the projects list
-  const projectIndex = projects.value.findIndex(p => p.id === updatedProject.id);
-  if (projectIndex !== -1) {
-    projects.value[projectIndex] = updatedProject;
-  }
-  
-  // Update the selected project if it's the same one
-  if (selectedProject.value && selectedProject.value.id === updatedProject.id) {
-    selectedProject.value = updatedProject;
+const openProjectsManagement = () => {
+  currentView.value = 'projects-management';
+  selectedProject.value = null;
+};
+
+const handleProjectStatusUpdated = async (projectIdOrProject, newStatus = null) => {
+  try {
+    let updatedProject;
+    
+    if (typeof projectIdOrProject === 'object') {
+      // Called from TasksPage with full project object
+      updatedProject = projectIdOrProject;
+    } else {
+      // Called from ProjectsManagement with projectId and newStatus
+      loading.value = true;
+      const response = await api.put(`/projects/${projectIdOrProject}`, {
+        status: newStatus
+      });
+      updatedProject = response.data;
+    }
+    
+    // Update the project in the projects list
+    const projectIndex = projects.value.findIndex(p => p.id === updatedProject.id);
+    if (projectIndex !== -1) {
+      projects.value[projectIndex] = updatedProject;
+    }
+    
+    // Update the selected project if it's the same one
+    if (selectedProject.value && selectedProject.value.id === updatedProject.id) {
+      selectedProject.value = updatedProject;
+    }
+  } catch (error) {
+    console.error('Error updating project status:', error);
+  } finally {
+    loading.value = false;
   }
 };
 
