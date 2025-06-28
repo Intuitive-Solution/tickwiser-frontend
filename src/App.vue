@@ -162,6 +162,7 @@
             <!-- Main Content -->
             <TasksPage 
               :tasks="getCurrentTasks()"
+              :projects="projects"
               :loading="loading"
               :current-view="currentView"
               :selected-project="selectedProject"

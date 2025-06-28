@@ -174,6 +174,7 @@
             <TableRow>
               <TableHead class="w-12">Status</TableHead>
               <TableHead>Task</TableHead>
+              <TableHead class="w-32">Project</TableHead>
               <TableHead class="w-32">Due Date</TableHead>
               <TableHead class="w-24"></TableHead>
               <TableHead class="w-20">Priority</TableHead>
@@ -183,7 +184,7 @@
           <TableBody>
             <TableRow v-for="task in filteredAndTabTasks" :key="task.id" :class="{ 'opacity-50': task.status, 'opacity-75 animate-pulse': task._isOptimistic }">
               <!-- Mobile Portrait View: Single cell spanning all columns -->
-              <TableCell colspan="6" class="sm:hidden p-3">
+              <TableCell colspan="7" class="sm:hidden p-3">
                 <div class="flex items-start gap-3">
                   <!-- Checkbox -->
                   <Checkbox
@@ -244,6 +245,14 @@
                           >
                             {{ task.comments.length }}
                           </Badge>
+                        </div>
+                      </div>
+                      
+                      <!-- Project Line (if task has project) -->
+                      <div v-if="getProjectName(task) && currentView !== 'project'" class="mb-1 px-2">
+                        <div class="flex items-center gap-1">
+                          <FolderOpen class="h-3 w-3 text-muted-foreground" />
+                          <span class="text-xs text-muted-foreground">{{ getProjectName(task) }}</span>
                         </div>
                       </div>
                       
@@ -407,6 +416,14 @@
                 </div>
               </TableCell>
               <TableCell class="hidden sm:table-cell">
+                <div v-if="getProjectName(task) && currentView !== 'project'" class="flex items-center gap-1">
+                  <FolderOpen class="h-4 w-4 text-muted-foreground" />
+                  <span class="text-sm text-muted-foreground">{{ getProjectName(task) }}</span>
+                </div>
+                <span v-else-if="currentView === 'project'" class="text-sm text-muted-foreground">-</span>
+                <span v-else class="text-sm text-muted-foreground">-</span>
+              </TableCell>
+              <TableCell class="hidden sm:table-cell">
                 <div v-if="editingTask === task.id" class="flex items-center gap-2">
                   <Input
                     v-model="editForm.date"
@@ -561,6 +578,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  projects: {
+    type: Array,
+    default: () => []
+  },
   loading: {
     type: Boolean,
     default: false
@@ -601,6 +622,13 @@ const projectStatusLoading = ref(false)
 // Platform-aware keyboard shortcut display
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
 const keyboardShortcut = isMac ? '⌘A' : 'Ctrl+A'
+
+// Helper function to get project name for a task
+const getProjectName = (task) => {
+  if (!task.project_id) return null
+  const project = props.projects.find(p => p.id === task.project_id)
+  return project ? project.name : null
+}
 
 const filteredTasks = computed(() => {
   const today = new Date()
