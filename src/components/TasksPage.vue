@@ -3,8 +3,36 @@
     <!-- Header with Add Task and Search -->
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">Tasks</h1>
-        <p class="text-muted-foreground">Manage your todo items</p>
+        <!-- Project View Header -->
+        <div class="flex items-center gap-3">
+          <FolderOpen v-if="currentView === 'project'" class="h-6 w-6 text-primary" />
+          <h1 class="text-2xl font-bold tracking-tight">
+            {{ currentView === 'project' && selectedProject ? selectedProject.name : 'Tasks' }}
+          </h1>
+          
+          <!-- Project Status Switch -->
+          <div v-if="currentView === 'project' && selectedProject" class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <Switch
+                :model-value="selectedProject.status === 'active'"
+                @update:model-value="toggleProjectStatus"
+                :disabled="projectStatusLoading"
+                class="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-red-600"
+              />
+              <span class="text-sm font-medium" :class="{
+                'text-green-700': selectedProject.status === 'active',
+                'text-red-700': selectedProject.status === 'inactive'
+              }">
+                {{ selectedProject.status === 'active' ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <p class="text-muted-foreground">
+          {{ currentView === 'project' && selectedProject 
+              ? `Manage tasks in ${selectedProject.name} project` 
+              : 'Manage your todo items' }}
+        </p>
       </div>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div class="relative flex-1 md:w-64">
@@ -17,7 +45,7 @@
         </div>
         <Button @click="toggleAddTaskForm" class="shrink-0">
           <Plus class="mr-2 h-4 w-4" />
-          Add Task
+          {{ currentView === 'project' && selectedProject ? 'Add Task to Project' : 'Add Task' }}
           <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded border font-black">{{ keyboardShortcut }}</kbd>
         </Button>
       </div>
@@ -26,7 +54,9 @@
     <!-- Add Task Form -->
     <Card v-if="showAddTaskForm" class="border-dashed">
       <CardHeader>
-        <CardTitle class="text-lg">Add New Task</CardTitle>
+        <CardTitle class="text-lg">
+          {{ currentView === 'project' && selectedProject ? `Add New Task to ${selectedProject.name}` : 'Add New Task' }}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <form @submit.prevent="createTask" class="space-y-4">
@@ -134,7 +164,7 @@
           </p>
           <Button v-if="!searchQuery" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
-            Add Your First Task
+            {{ currentView === 'project' && selectedProject ? 'Add First Task to Project' : 'Add Your First Task' }}
             <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded border">{{ keyboardShortcut }}</kbd>
           </Button>
         </div>
@@ -498,6 +528,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -520,7 +551,9 @@ import {
   X,
   ArrowRight,
   ArrowLeft,
-  MessageSquare
+  MessageSquare,
+  FolderOpen,
+  ChevronLeft
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -531,10 +564,18 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  currentView: {
+    type: String,
+    default: 'tasks'
+  },
+  selectedProject: {
+    type: Object,
+    default: null
   }
 })
 
-const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted', 'task-deleted-confirmed', 'task-deletion-failed'])
+const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted', 'task-deleted-confirmed', 'task-deletion-failed', 'back-to-tasks', 'project-status-updated'])
 
 const searchQuery = ref('')
 const showAddTaskForm = ref(false)
@@ -555,6 +596,7 @@ const editForm = ref({
 })
 const showComments = ref(false)
 const selectedTask = ref(null)
+const projectStatusLoading = ref(false)
 
 // Platform-aware keyboard shortcut display
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
@@ -595,12 +637,18 @@ const getFilteredTaskCountByTab = (tab) => {
 const createTask = async () => {
   const taskData = { ...newTask.value }
   
+  // If we're in project view, automatically assign the task to the selected project
+  if (props.currentView === 'project' && props.selectedProject) {
+    taskData.project_id = props.selectedProject.id
+  }
+  
   // Generate a temporary ID for optimistic update
   const tempId = Date.now()
   const optimisticTask = {
     id: tempId,
     ...taskData,
     comments: [],
+    project: props.selectedProject || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     _isOptimistic: true // Flag to indicate this is an optimistic update
@@ -1159,6 +1207,28 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
+
+const toggleProjectStatus = async (isActive) => {
+  if (!props.selectedProject || projectStatusLoading.value) return
+  
+  const newStatus = isActive ? 'active' : 'inactive'
+  
+  try {
+    projectStatusLoading.value = true
+    const response = await api.put(`/projects/${props.selectedProject.id}`, {
+      status: newStatus
+    })
+    
+    // Emit the updated project to parent component
+    emit('project-status-updated', response.data)
+    
+  } catch (error) {
+    console.error('Error updating project status:', error)
+    alert('Failed to update project status. Please try again.')
+  } finally {
+    projectStatusLoading.value = false
+  }
+}
 
 const playSuccessSound = () => {
   try {

@@ -65,6 +65,45 @@
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel>
+                <div class="flex items-center justify-between w-full">
+                  <h2 class="text-lg font-semibold">Projects</h2>
+                  <SidebarMenuButton 
+                    size="sm" 
+                    class="h-6 w-6 p-0 hover:bg-muted/50 ml-2"
+                    @click="handleAddProject"
+                    title="Add Project"
+                  >
+                    <Plus class="h-3 w-3" />
+                  </SidebarMenuButton>
+                </div>
+              </SidebarGroupLabel>
+              <SidebarMenu>
+                <SidebarMenuItem v-for="project in projects" :key="project.id">
+                  <SidebarMenuButton 
+                    :is-active="currentView === 'project' && selectedProject?.id === project.id"
+                    @click="openProjectTasks(project)"
+                    :class="{ 'opacity-50': project.status === 'inactive' }"
+                  >
+                    <FolderOpen class="h-4 w-4" />
+                    <span>{{ project.name }}</span>
+                    <SidebarMenuBadge 
+                      v-if="project.status === 'inactive'" 
+                      variant="secondary"
+                      class="text-xs"
+                    >
+                      Inactive
+                    </SidebarMenuBadge>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem v-if="projects.length === 0">
+                  <div class="px-2 py-1 text-sm text-muted-foreground">
+                    No projects yet
+                  </div>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
           </SidebarContent>
           
           <SidebarFooter>
@@ -124,6 +163,8 @@
             <TasksPage 
               :tasks="getCurrentTasks()"
               :loading="loading"
+              :current-view="currentView"
+              :selected-project="selectedProject"
               @task-created="handleTaskCreated"
               @task-created-confirmed="handleTaskCreatedConfirmed"
               @task-creation-failed="handleTaskCreationFailed"
@@ -133,10 +174,19 @@
               @task-deleted="handleTaskDeleted"
               @task-deleted-confirmed="handleTaskDeletedConfirmed"
               @task-deletion-failed="handleTaskDeletionFailed"
+              @back-to-tasks="currentView = 'tasks'; selectedProject = null"
+              @project-status-updated="handleProjectStatusUpdated"
             />
           </div>
         </SidebarInset>
       </SidebarProvider>
+      
+      <!-- Add Project Modal -->
+      <AddProjectModal 
+        :open="showAddProjectModal"
+        @update:open="showAddProjectModal = $event"
+        @project-created="handleProjectCreated"
+      />
     </div>
   </div>
 </template>
@@ -146,6 +196,7 @@ import { ref, onMounted, computed, onUnmounted } from 'vue';
 import api from './services/api';
 import Login from './components/Login.vue';
 import TasksPage from './components/TasksPage.vue';
+import AddProjectModal from './components/AddProjectModal.vue';
 import { onAuthStateChange, logout } from './services/firebase';
 
 // Sidebar components
@@ -188,13 +239,18 @@ import {
   AlertTriangle, 
   ChevronUp, 
   LogOut,
-  Clock
+  Clock,
+  Plus,
+  FolderOpen
 } from 'lucide-vue-next';
 
 const tasks = ref([]);
+const projects = ref([]);
 const user = ref(null);
 const loading = ref(false);
 const currentView = ref('tasks');
+const showAddProjectModal = ref(false);
+const selectedProject = ref(null);
 
 // Countdown timer
 const countdown = ref({
@@ -229,12 +285,19 @@ const overdueTasks = computed(() => {
   });
 });
 
+const projectTasks = computed(() => {
+  if (!selectedProject.value) return [];
+  return tasks.value.filter(task => task.project_id === selectedProject.value.id);
+});
+
 const getCurrentTasks = () => {
   switch (currentView.value) {
     case 'completed':
       return completedTasks.value;
     case 'overdue':
       return overdueTasks.value;
+    case 'project':
+      return projectTasks.value;
     case 'tasks':
     default:
       return incompleteTasks.value;
@@ -250,6 +313,15 @@ const fetchTasks = async () => {
     console.error('Error fetching tasks:', error);
   } finally {
     loading.value = false;
+  }
+};
+
+const fetchProjects = async () => {
+  try {
+    const res = await api.get('/projects');
+    projects.value = res.data;
+  } catch (error) {
+    console.error('Error fetching projects:', error);
   }
 };
 
@@ -326,6 +398,7 @@ const handleTaskDeletionFailed = (eventData) => {
 const handleAuthentication = (authenticatedUser) => {
   user.value = authenticatedUser;
   fetchTasks();
+  fetchProjects();
 };
 
 const handleLogout = async () => {
@@ -333,10 +406,40 @@ const handleLogout = async () => {
     await logout();
     user.value = null;
     tasks.value = [];
+    projects.value = [];
   } catch (error) {
     console.error('Logout error:', error);
   }
 };
+
+const handleAddProject = () => {
+  showAddProjectModal.value = true;
+};
+
+const handleProjectCreated = (newProject) => {
+  projects.value.unshift(newProject);
+  console.log('Project created:', newProject);
+};
+
+const openProjectTasks = (project) => {
+  selectedProject.value = project;
+  currentView.value = 'project';
+};
+
+const handleProjectStatusUpdated = (updatedProject) => {
+  // Update the project in the projects list
+  const projectIndex = projects.value.findIndex(p => p.id === updatedProject.id);
+  if (projectIndex !== -1) {
+    projects.value[projectIndex] = updatedProject;
+  }
+  
+  // Update the selected project if it's the same one
+  if (selectedProject.value && selectedProject.value.id === updatedProject.id) {
+    selectedProject.value = updatedProject;
+  }
+};
+
+
 
 const getInitials = (name) => {
   if (!name) return 'U';
@@ -385,8 +488,10 @@ onMounted(() => {
     user.value = authUser;
     if (authUser) {
       fetchTasks();
+      fetchProjects();
     } else {
       tasks.value = [];
+      projects.value = [];
     }
   });
 });
