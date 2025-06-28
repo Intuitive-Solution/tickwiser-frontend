@@ -43,6 +43,62 @@
             class="pl-8"
           />
         </div>
+        
+        <!-- Project Filter (only show in main task views, not in project-specific view) -->
+        <div v-if="currentView !== 'project'" class="relative">
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="outline" class="shrink-0">
+                <Filter class="mr-2 h-4 w-4" />
+                {{ getSelectedProjectsText() }}
+                <ChevronDown class="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-64">
+              <div class="flex items-center justify-between p-2 border-b">
+                <span class="font-medium text-sm">Filter by Projects</span>
+                <Button 
+                  v-if="selectedProjectFilters.length > 0" 
+                  variant="ghost" 
+                  size="sm" 
+                  @click="clearProjectFilters"
+                  class="h-6 px-2 text-xs"
+                >
+                  Clear
+                </Button>
+              </div>
+              
+              <!-- No Project Option -->
+              <DropdownMenuItem @click="toggleProjectFilter('no-project')" class="flex items-center gap-2">
+                <Check v-if="selectedProjectFilters.includes('no-project')" class="h-4 w-4 text-primary" />
+                <div v-else class="h-4 w-4"></div>
+                <span>No Project</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator v-if="activeProjects.length > 0" />
+              
+              <!-- Project Options (only active projects) -->
+              <DropdownMenuItem 
+                v-for="project in activeProjects" 
+                :key="project.id"
+                @click="toggleProjectFilter(project.id.toString())"
+                class="flex items-center gap-2"
+              >
+                <Check v-if="selectedProjectFilters.includes(project.id.toString())" class="h-4 w-4 text-primary" />
+                <div v-else class="h-4 w-4"></div>
+                <div class="flex items-center gap-2">
+                  <FolderOpen class="h-4 w-4 text-muted-foreground" />
+                  <span>{{ project.name }}</span>
+                </div>
+              </DropdownMenuItem>
+              
+              <div v-if="activeProjects.length === 0" class="p-2 text-sm text-muted-foreground text-center">
+                No active projects available
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
         <Button @click="toggleAddTaskForm" class="shrink-0">
           <Plus class="mr-2 h-4 w-4" />
           {{ currentView === 'project' && selectedProject ? 'Add Task to Project' : 'Add Task' }}
@@ -520,7 +576,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import api from '../services/api'
 import TaskComments from './TaskComments.vue'
 import { Button } from '@/components/ui/button'
@@ -555,7 +611,9 @@ import {
   MessageSquare,
   MessageCircle,
   FolderOpen,
-  ChevronLeft
+  ChevronLeft,
+  Filter,
+  ChevronDown
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -584,6 +642,8 @@ const props = defineProps({
 const emit = defineEmits(['refresh-tasks', 'task-created', 'task-created-confirmed', 'task-creation-failed', 'task-updated', 'task-deleted', 'task-deleted-confirmed', 'task-deletion-failed', 'back-to-tasks', 'project-status-updated'])
 
 const searchQuery = ref('')
+const selectedProjectFilters = ref([])
+const showProjectFilter = ref(false)
 const showAddTaskForm = ref(false)
 const editingTask = ref(null)
 const editTitleInput = ref(null)
@@ -615,6 +675,56 @@ const getProjectName = (task) => {
   return project ? project.name : null
 }
 
+// Computed property for active projects only
+const activeProjects = computed(() => {
+  return props.projects.filter(p => p.status === 'active')
+})
+
+// Watch for changes in projects and clean up invalid filters
+watch(() => props.projects, () => {
+  // Remove any selected project filters that are no longer active
+  const activeProjectIds = activeProjects.value.map(p => p.id.toString())
+  selectedProjectFilters.value = selectedProjectFilters.value.filter(id => 
+    id === 'no-project' || activeProjectIds.includes(id)
+  )
+}, { immediate: true })
+
+// Helper functions for project filter
+const toggleProjectFilter = (projectId) => {
+  const index = selectedProjectFilters.value.indexOf(projectId)
+  if (index > -1) {
+    selectedProjectFilters.value.splice(index, 1)
+  } else {
+    selectedProjectFilters.value.push(projectId)
+  }
+}
+
+const clearProjectFilters = () => {
+  selectedProjectFilters.value = []
+}
+
+const getSelectedProjectsText = () => {
+  if (selectedProjectFilters.value.length === 0) {
+    return 'All Projects'
+  }
+  
+  const projectNames = selectedProjectFilters.value.map(id => {
+    if (id === 'no-project') return 'No Project'
+    const project = activeProjects.value.find(p => p.id.toString() === id)
+    return project ? project.name : 'Unknown'
+  }).filter(name => name !== 'Unknown') // Filter out unknown projects (inactive ones)
+  
+  if (projectNames.length === 0) {
+    return 'All Projects' // Fallback if all selected projects became inactive
+  } else if (projectNames.length === 1) {
+    return projectNames[0]
+  } else if (projectNames.length === 2) {
+    return `${projectNames[0]} and ${projectNames[1]}`
+  } else {
+    return `${projectNames[0]} and ${projectNames.length - 1} more`
+  }
+}
+
 const filteredTasks = computed(() => {
   const today = new Date()
   today.setHours(0, 0, 0, 0) // Reset time to start of day for accurate comparison
@@ -631,11 +741,26 @@ const filteredTasks = computed(() => {
     return true
   })
   
-  if (!searchQuery.value) return tasks
+  // Apply project filter
+  if (selectedProjectFilters.value.length > 0) {
+    tasks = tasks.filter(task => {
+      // If task has no project_id, check if "No Project" is selected
+      if (!task.project_id) {
+        return selectedProjectFilters.value.includes('no-project')
+      }
+      // Otherwise check if the task's project is selected
+      return selectedProjectFilters.value.includes(task.project_id.toString())
+    })
+  }
   
-  return tasks.filter(task =>
-    task.title.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+  // Apply search filter
+  if (searchQuery.value) {
+    tasks = tasks.filter(task =>
+      task.title.toLowerCase().includes(searchQuery.value.toLowerCase())
+    )
+  }
+  
+  return tasks
 })
 
 const filteredAndTabTasks = computed(() => {
