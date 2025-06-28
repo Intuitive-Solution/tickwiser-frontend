@@ -234,17 +234,11 @@
                             size="sm" 
                             class="h-6 w-6 p-0 hover:bg-muted/50"
                             @click="openComments(task)"
-                            :title="task.comments && task.comments.length > 0 ? `${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}` : 'Add comment'"
+                            :title="task.comments && task.comments.length > 0 ? 'View comments' : 'Add comment'"
                           >
-                            <MessageSquare class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                            <MessageCircle v-if="task.comments && task.comments.length > 0" class="h-3 w-3 text-blue-600 hover:text-blue-700" />
+                            <MessageSquare v-else class="h-3 w-3 text-muted-foreground hover:text-foreground" />
                           </Button>
-                          <Badge 
-                            v-if="task.comments && task.comments.length > 0" 
-                            variant="secondary" 
-                            class="h-4 text-xs px-1 min-w-[16px] flex items-center justify-center"
-                          >
-                            {{ task.comments.length }}
-                          </Badge>
                         </div>
                       </div>
                       
@@ -307,11 +301,9 @@
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem @click="openComments(task)">
-                              <MessageSquare class="mr-2 h-4 w-4" />
+                              <MessageCircle v-if="task.comments && task.comments.length > 0" class="mr-2 h-4 w-4 text-blue-600" />
+                              <MessageSquare v-else class="mr-2 h-4 w-4" />
                               Comments
-                              <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
-                                {{ task.comments.length }}
-                              </Badge>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
@@ -400,17 +392,11 @@
                         size="sm" 
                         class="h-6 w-6 p-0 hover:bg-muted/50"
                         @click="openComments(task)"
-                        :title="task.comments && task.comments.length > 0 ? `${task.comments.length} comment${task.comments.length > 1 ? 's' : ''}` : 'Add comment'"
+                        :title="task.comments && task.comments.length > 0 ? 'View comments' : 'Add comment'"
                       >
-                        <MessageSquare class="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        <MessageCircle v-if="task.comments && task.comments.length > 0" class="h-3 w-3 text-blue-600 hover:text-blue-700" />
+                        <MessageSquare v-else class="h-3 w-3 text-muted-foreground hover:text-foreground" />
                       </Button>
-                      <Badge 
-                        v-if="task.comments && task.comments.length > 0" 
-                        variant="secondary" 
-                        class="h-4 text-xs px-1 min-w-[16px] flex items-center justify-center"
-                      >
-                        {{ task.comments.length }}
-                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -475,11 +461,9 @@
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem @click="openComments(task)">
-                      <MessageSquare class="mr-2 h-4 w-4" />
+                      <MessageCircle v-if="task.comments && task.comments.length > 0" class="mr-2 h-4 w-4 text-blue-600" />
+                      <MessageSquare v-else class="mr-2 h-4 w-4" />
                       Comments
-                      <Badge v-if="task.comments && task.comments.length > 0" variant="secondary" class="ml-2">
-                        {{ task.comments.length }}
-                      </Badge>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem v-if="activeTab !== 'today'" @click="pushToToday(task)">
@@ -569,6 +553,7 @@ import {
   ArrowRight,
   ArrowLeft,
   MessageSquare,
+  MessageCircle,
   FolderOpen,
   ChevronLeft
 } from 'lucide-vue-next'
