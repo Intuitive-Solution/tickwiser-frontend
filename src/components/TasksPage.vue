@@ -6,12 +6,16 @@
         <!-- Project View Header -->
         <div class="flex items-center gap-3">
           <FolderOpen v-if="currentView === 'project'" class="h-6 w-6 text-primary" />
+          <Check v-if="currentView === 'completed'" class="h-6 w-6 text-green-600" />
+          <AlertTriangle v-if="currentView === 'overdue'" class="h-6 w-6 text-red-600" />
           <h1 class="text-2xl font-bold tracking-tight">
-            {{ currentView === 'project' && selectedProject ? selectedProject.name : 'Tasks' }}
+            {{ currentView === 'project' && selectedProject ? selectedProject.name : 
+               currentView === 'completed' ? 'Completed Tasks' :
+               currentView === 'overdue' ? 'Overdue Tasks' : 'Tasks' }}
           </h1>
           
           <!-- Project Status Switch -->
-          <div v-if="currentView === 'project' && selectedProject" class="flex items-center gap-3">
+          <div v-if="currentView === 'project' && selectedProject" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
             <div class="flex items-center gap-2">
               <Switch
                 :model-value="selectedProject.status === 'active'"
@@ -26,11 +30,26 @@
                 {{ selectedProject.status === 'active' ? 'Active' : 'Inactive' }}
               </span>
             </div>
+            
+            <!-- Show Completed Tasks Switch -->
+            <div class="flex items-center gap-2">
+              <Switch
+                v-model="showCompletedTasks"
+                class="data-[state=checked]:bg-blue-600"
+              />
+              <span class="text-sm font-medium text-muted-foreground">
+                Show Completed
+              </span>
+            </div>
           </div>
         </div>
         <p class="text-muted-foreground">
           {{ currentView === 'project' && selectedProject 
               ? `Manage tasks in ${selectedProject.name} project` 
+              : currentView === 'completed'
+              ? 'View completed tasks from the past 7 days'
+              : currentView === 'overdue'
+              ? 'View all tasks that are past their due date'
               : 'Manage your todo items' }}
         </p>
       </div>
@@ -185,9 +204,9 @@
     <Card>
      
       <CardContent>
-        <!-- Time-based Tabs -->
-        <Tabs v-model="activeTab" class="mb-6">
-          <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1">
+        <!-- Time-based Tabs (only show when not in project, completed, or overdue view) -->
+        <Tabs v-if="currentView !== 'project' && currentView !== 'completed' && currentView !== 'overdue'" v-model="activeTab" class="mb-6">
+          <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1">
             <TabsTrigger value="today" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
               <span class="truncate">Today</span>
               <Badge v-if="getFilteredTaskCountByTab('today') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
@@ -200,9 +219,15 @@
                 {{ getFilteredTaskCountByTab('tomorrow') }}
               </Badge>
             </TabsTrigger>
+            <TabsTrigger value="thisweek" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate">This Week</span>
+              <Badge v-if="getFilteredTaskCountByTab('thisweek') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
+                {{ getFilteredTaskCountByTab('thisweek') }}
+              </Badge>
+            </TabsTrigger>
             <TabsTrigger value="week" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
               <span class="truncate sm:hidden">Week</span>
-              <span class="truncate hidden sm:inline">Next Week</span>
+              <span class="truncate hidden sm:inline">This Month</span>
               <Badge v-if="getFilteredTaskCountByTab('week') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('week') }}
               </Badge>
@@ -233,9 +258,15 @@
           <div class="text-4xl mb-4">📝</div>
           <h3 class="text-lg font-medium mb-2">No tasks found</h3>
           <p class="text-muted-foreground mb-4">
-            {{ searchQuery ? 'No tasks match your search.' : `No tasks for ${getTabLabel(activeTab)}.` }}
+            {{ searchQuery ? 'No tasks match your search.' : 
+               currentView === 'project' ? 
+                 (showCompletedTasks ? `No tasks in ${selectedProject?.name || 'this project'}.` : 
+                  `No incomplete tasks in ${selectedProject?.name || 'this project'}. Toggle "Show Completed" to see completed tasks.`) :
+               currentView === 'completed' ? 'No completed tasks from the past 7 days.' :
+               currentView === 'overdue' ? 'Great! You have no overdue tasks.' :
+               `No tasks for ${getTabLabel(activeTab)}.` }}
           </p>
-          <Button v-if="!searchQuery" @click="toggleAddTaskForm">
+          <Button v-if="!searchQuery && currentView !== 'completed' && currentView !== 'overdue'" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
             {{ currentView === 'project' && selectedProject ? 'Add First Task to Project' : 'Add Your First Task' }}
             <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded border">{{ keyboardShortcut }}</kbd>
@@ -414,9 +445,14 @@
                               Push to Tomorrow
                             </DropdownMenuItem>
                             <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                            <DropdownMenuItem v-if="activeTab !== 'thisweek'" @click="pushToThisWeek(task)">
+                              <Calendar class="mr-2 h-4 w-4" />
+                              Push to This Week
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'thisweek'" />
                             <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
                               <CalendarDays class="mr-2 h-4 w-4" />
-                              Push to Next Week
+                              Push to This Month
                             </DropdownMenuItem>
                             <DropdownMenuSeparator v-if="activeTab !== 'week'" />
                             <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
@@ -598,9 +634,14 @@
                       Push to Tomorrow
                     </DropdownMenuItem>
                     <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                    <DropdownMenuItem v-if="activeTab !== 'thisweek'" @click="pushToThisWeek(task)">
+                      <Calendar class="mr-2 h-4 w-4" />
+                      Push to This Week
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'thisweek'" />
                     <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
                       <CalendarDays class="mr-2 h-4 w-4" />
-                      Push to Next Week
+                      Push to This Month
                     </DropdownMenuItem>
                     <DropdownMenuSeparator v-if="activeTab !== 'week'" />
                     <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
@@ -686,7 +727,8 @@ import {
   FolderOpen,
   ChevronLeft,
   Filter,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -738,6 +780,7 @@ const editForm = ref({
 const showComments = ref(false)
 const selectedTask = ref(null)
 const projectStatusLoading = ref(false)
+const showCompletedTasks = ref(false)
 
 // Platform-aware keyboard shortcut display
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
@@ -805,19 +848,32 @@ const filteredTasks = computed(() => {
   today.setHours(0, 0, 0, 0) // Reset time to start of day for accurate comparison
   
   let tasks = props.tasks.filter(task => {
-    // Filter out completed tasks that are older than today
-    if (task.status) {
-      const taskDate = new Date(task.date)
-      taskDate.setHours(0, 0, 0, 0)
-      if (taskDate < today) {
-        return false // Hide completed tasks older than today
+    // In project view, filter completed tasks based on the switch
+    if (props.currentView === 'project') {
+      if (task.status && !showCompletedTasks.value) {
+        return false // Hide completed tasks when switch is off
+      }
+    } else if (props.currentView === 'completed') {
+      // In completed view, show all completed tasks (already filtered by App.vue)
+      return true
+    } else if (props.currentView === 'overdue') {
+      // In overdue view, show all overdue tasks (already filtered by App.vue)
+      return true
+    } else {
+      // In main view, filter out completed tasks that are older than today
+      if (task.status) {
+        const taskDate = new Date(task.date)
+        taskDate.setHours(0, 0, 0, 0)
+        if (taskDate < today) {
+          return false // Hide completed tasks older than today
+        }
       }
     }
     return true
   })
   
-  // Apply project filter
-  if (selectedProjectFilters.value.length > 0) {
+  // Apply project filter (only in main view, not in project-specific, completed, or overdue view)
+  if (selectedProjectFilters.value.length > 0 && props.currentView !== 'project' && props.currentView !== 'completed' && props.currentView !== 'overdue') {
     tasks = tasks.filter(task => {
       // If task has no project_id, check if "No Project" is selected
       if (!task.project_id) {
@@ -840,6 +896,13 @@ const filteredTasks = computed(() => {
 
 const filteredAndTabTasks = computed(() => {
   const searchFiltered = filteredTasks.value
+  
+  // If in project, completed, or overdue view, show all tasks without tab filtering
+  if (props.currentView === 'project' || props.currentView === 'completed' || props.currentView === 'overdue') {
+    return searchFiltered
+  }
+  
+  // Otherwise, apply tab filtering
   return getTasksByTab(activeTab.value, searchFiltered)
 })
 
@@ -1132,6 +1195,48 @@ const pushToTomorrow = async (task) => {
   }
 }
 
+const pushToThisWeek = async (task) => {
+  const today = new Date()
+  const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+  
+  // Calculate days until this Sunday
+  const daysUntilSunday = currentDay === 0 ? 0 : (7 - currentDay)
+  
+  const thisSunday = new Date()
+  thisSunday.setDate(today.getDate() + daysUntilSunday)
+  const thisSundayDate = new Date(thisSunday.getTime() - thisSunday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: thisSundayDate,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
+  try {
+    const response = await api.put(`/tasks/${task.id}`, {
+      date: thisSundayDate
+    })
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
+  } catch (error) {
+    console.error('Error pushing task to this week:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to this week. Please try again.')
+  }
+}
+
 const pushNextWeek = async (task) => {
   const today = new Date()
   const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
@@ -1268,8 +1373,14 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   
-  // Calculate next week (Monday to Sunday)
+  // Calculate this week (today until Sunday)
   const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+  const daysUntilSunday = currentDay === 0 ? 0 : (7 - currentDay) // Days until this Sunday
+  
+  const thisWeekEnd = new Date(today) // This Sunday
+  thisWeekEnd.setDate(today.getDate() + daysUntilSunday)
+  
+  // Calculate next week (Monday to Sunday)
   const daysUntilNextMonday = currentDay === 0 ? 1 : (8 - currentDay)
   
   const nextWeekStart = new Date(today) // Next Monday
@@ -1286,6 +1397,11 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
   const futureStart = new Date(today.getFullYear(), today.getMonth() + 2, 1) // First day after next month
   
   return taskList.filter(task => {
+    // Filter out completed tasks for all tabs except today
+    if (task.status && tab !== 'today') {
+      return false
+    }
+    
     const taskDate = new Date(task.date)
     taskDate.setHours(0, 0, 0, 0) // Reset time to start of day for accurate comparison
     
@@ -1295,9 +1411,12 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
         return taskDate <= today
       case 'tomorrow':
         return isSameDay(taskDate, tomorrow)
+      case 'thisweek':
+        // Show incomplete tasks from today until this Sunday
+        return taskDate > tomorrow && taskDate <= thisWeekEnd
       case 'week':
         // Show tasks due next week (Monday to Sunday)
-        return taskDate >= nextWeekStart && taskDate <= nextWeekEnd
+        return taskDate >= nextWeekStart && taskDate < nextMonthStart
       case 'month':
         // Show tasks due next month (1st to end of next month)
         return taskDate >= nextMonthStart && taskDate <= nextMonthEnd
@@ -1322,6 +1441,7 @@ const getTabLabel = (tab) => {
   const labels = {
     today: 'today and overdue tasks',
     tomorrow: 'tomorrow',
+    thisweek: 'this week',
     week: 'next week',
     month: 'next month',
     year: 'future tasks'
