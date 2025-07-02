@@ -187,7 +187,7 @@
       <CardContent>
         <!-- Time-based Tabs -->
         <Tabs v-model="activeTab" class="mb-6">
-          <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1">
+          <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1">
             <TabsTrigger value="today" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
               <span class="truncate">Today</span>
               <Badge v-if="getFilteredTaskCountByTab('today') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
@@ -200,9 +200,15 @@
                 {{ getFilteredTaskCountByTab('tomorrow') }}
               </Badge>
             </TabsTrigger>
+            <TabsTrigger value="thisweek" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
+              <span class="truncate">This Week</span>
+              <Badge v-if="getFilteredTaskCountByTab('thisweek') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
+                {{ getFilteredTaskCountByTab('thisweek') }}
+              </Badge>
+            </TabsTrigger>
             <TabsTrigger value="week" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
               <span class="truncate sm:hidden">Week</span>
-              <span class="truncate hidden sm:inline">Next Week</span>
+              <span class="truncate hidden sm:inline">This Month</span>
               <Badge v-if="getFilteredTaskCountByTab('week') > 0" variant="secondary" class="text-xs px-1 py-0 min-w-[16px] h-4">
                 {{ getFilteredTaskCountByTab('week') }}
               </Badge>
@@ -414,9 +420,14 @@
                               Push to Tomorrow
                             </DropdownMenuItem>
                             <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                            <DropdownMenuItem v-if="activeTab !== 'thisweek'" @click="pushToThisWeek(task)">
+                              <Calendar class="mr-2 h-4 w-4" />
+                              Push to This Week
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator v-if="activeTab !== 'thisweek'" />
                             <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
                               <CalendarDays class="mr-2 h-4 w-4" />
-                              Push to Next Week
+                              Push to This Month
                             </DropdownMenuItem>
                             <DropdownMenuSeparator v-if="activeTab !== 'week'" />
                             <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
@@ -598,9 +609,14 @@
                       Push to Tomorrow
                     </DropdownMenuItem>
                     <DropdownMenuSeparator v-if="activeTab !== 'tomorrow'" />
+                    <DropdownMenuItem v-if="activeTab !== 'thisweek'" @click="pushToThisWeek(task)">
+                      <Calendar class="mr-2 h-4 w-4" />
+                      Push to This Week
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator v-if="activeTab !== 'thisweek'" />
                     <DropdownMenuItem v-if="activeTab !== 'week'" @click="pushNextWeek(task)">
                       <CalendarDays class="mr-2 h-4 w-4" />
-                      Push to Next Week
+                      Push to This Month
                     </DropdownMenuItem>
                     <DropdownMenuSeparator v-if="activeTab !== 'week'" />
                     <DropdownMenuItem v-if="activeTab !== 'month'" @click="pushNextMonth(task)">
@@ -1132,6 +1148,48 @@ const pushToTomorrow = async (task) => {
   }
 }
 
+const pushToThisWeek = async (task) => {
+  const today = new Date()
+  const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+  
+  // Calculate days until this Sunday
+  const daysUntilSunday = currentDay === 0 ? 0 : (7 - currentDay)
+  
+  const thisSunday = new Date()
+  thisSunday.setDate(today.getDate() + daysUntilSunday)
+  const thisSundayDate = new Date(thisSunday.getTime() - thisSunday.getTimezoneOffset() * 60000).toISOString().split('T')[0]
+  
+  // Store original task data for potential rollback
+  const originalTask = { ...task }
+  
+  // Create optimistic update
+  const optimisticTask = {
+    ...task,
+    date: thisSundayDate,
+    _isOptimistic: true,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Immediately update the UI (optimistic update)
+  emit('task-updated', { taskId: task.id, optimisticTask, originalTask })
+  
+  // Make async API call in background
+  try {
+    const response = await api.put(`/tasks/${task.id}`, {
+      date: thisSundayDate
+    })
+    // Confirm the update with real server data
+    emit('task-updated-confirmed', { taskId: task.id, realTask: response.data })
+  } catch (error) {
+    console.error('Error pushing task to this week:', error)
+    // Revert the optimistic update on error
+    emit('task-update-failed', { taskId: task.id, originalTask })
+    
+    // Show error to user
+    alert('Failed to push task to this week. Please try again.')
+  }
+}
+
 const pushNextWeek = async (task) => {
   const today = new Date()
   const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
@@ -1268,8 +1326,14 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   
-  // Calculate next week (Monday to Sunday)
+  // Calculate this week (today until Sunday)
   const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+  const daysUntilSunday = currentDay === 0 ? 0 : (7 - currentDay) // Days until this Sunday
+  
+  const thisWeekEnd = new Date(today) // This Sunday
+  thisWeekEnd.setDate(today.getDate() + daysUntilSunday)
+  
+  // Calculate next week (Monday to Sunday)
   const daysUntilNextMonday = currentDay === 0 ? 1 : (8 - currentDay)
   
   const nextWeekStart = new Date(today) // Next Monday
@@ -1286,6 +1350,11 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
   const futureStart = new Date(today.getFullYear(), today.getMonth() + 2, 1) // First day after next month
   
   return taskList.filter(task => {
+    // Filter out completed tasks for all tabs except today
+    if (task.status && tab !== 'today') {
+      return false
+    }
+    
     const taskDate = new Date(task.date)
     taskDate.setHours(0, 0, 0, 0) // Reset time to start of day for accurate comparison
     
@@ -1295,9 +1364,12 @@ const getTasksByTab = (tab, taskList = props.tasks) => {
         return taskDate <= today
       case 'tomorrow':
         return isSameDay(taskDate, tomorrow)
+      case 'thisweek':
+        // Show incomplete tasks from today until this Sunday
+        return taskDate > tomorrow && taskDate <= thisWeekEnd
       case 'week':
         // Show tasks due next week (Monday to Sunday)
-        return taskDate >= nextWeekStart && taskDate <= nextWeekEnd
+        return taskDate >= nextWeekStart && taskDate < nextMonthStart
       case 'month':
         // Show tasks due next month (1st to end of next month)
         return taskDate >= nextMonthStart && taskDate <= nextMonthEnd
@@ -1322,6 +1394,7 @@ const getTabLabel = (tab) => {
   const labels = {
     today: 'today and overdue tasks',
     tomorrow: 'tomorrow',
+    thisweek: 'this week',
     week: 'next week',
     month: 'next month',
     year: 'future tasks'
