@@ -293,7 +293,19 @@ const incompleteTasks = computed(() => {
 });
 
 const completedTasks = computed(() => {
-  return tasks.value.filter(task => task.status && isTaskFromActiveProject(task));
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+  
+  return tasks.value.filter(task => {
+    if (!task.status || !isTaskFromActiveProject(task)) return false;
+    
+    // Check if task was completed in the past 7 days
+    const taskDate = new Date(task.date);
+    taskDate.setHours(0, 0, 0, 0);
+    
+    return taskDate >= sevenDaysAgo;
+  });
 });
 
 const overdueTasks = computed(() => {

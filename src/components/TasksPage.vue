@@ -6,8 +6,12 @@
         <!-- Project View Header -->
         <div class="flex items-center gap-3">
           <FolderOpen v-if="currentView === 'project'" class="h-6 w-6 text-primary" />
+          <Check v-if="currentView === 'completed'" class="h-6 w-6 text-green-600" />
+          <AlertTriangle v-if="currentView === 'overdue'" class="h-6 w-6 text-red-600" />
           <h1 class="text-2xl font-bold tracking-tight">
-            {{ currentView === 'project' && selectedProject ? selectedProject.name : 'Tasks' }}
+            {{ currentView === 'project' && selectedProject ? selectedProject.name : 
+               currentView === 'completed' ? 'Completed Tasks' :
+               currentView === 'overdue' ? 'Overdue Tasks' : 'Tasks' }}
           </h1>
           
           <!-- Project Status Switch -->
@@ -42,6 +46,10 @@
         <p class="text-muted-foreground">
           {{ currentView === 'project' && selectedProject 
               ? `Manage tasks in ${selectedProject.name} project` 
+              : currentView === 'completed'
+              ? 'View completed tasks from the past 7 days'
+              : currentView === 'overdue'
+              ? 'View all tasks that are past their due date'
               : 'Manage your todo items' }}
         </p>
       </div>
@@ -196,8 +204,8 @@
     <Card>
      
       <CardContent>
-        <!-- Time-based Tabs (only show when not in project view) -->
-        <Tabs v-if="currentView !== 'project'" v-model="activeTab" class="mb-6">
+        <!-- Time-based Tabs (only show when not in project, completed, or overdue view) -->
+        <Tabs v-if="currentView !== 'project' && currentView !== 'completed' && currentView !== 'overdue'" v-model="activeTab" class="mb-6">
           <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1">
             <TabsTrigger value="today" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
               <span class="truncate">Today</span>
@@ -254,9 +262,11 @@
                currentView === 'project' ? 
                  (showCompletedTasks ? `No tasks in ${selectedProject?.name || 'this project'}.` : 
                   `No incomplete tasks in ${selectedProject?.name || 'this project'}. Toggle "Show Completed" to see completed tasks.`) :
+               currentView === 'completed' ? 'No completed tasks from the past 7 days.' :
+               currentView === 'overdue' ? 'Great! You have no overdue tasks.' :
                `No tasks for ${getTabLabel(activeTab)}.` }}
           </p>
-          <Button v-if="!searchQuery" @click="toggleAddTaskForm">
+          <Button v-if="!searchQuery && currentView !== 'completed' && currentView !== 'overdue'" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
             {{ currentView === 'project' && selectedProject ? 'Add First Task to Project' : 'Add Your First Task' }}
             <kbd class="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded border">{{ keyboardShortcut }}</kbd>
@@ -717,7 +727,8 @@ import {
   FolderOpen,
   ChevronLeft,
   Filter,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -842,6 +853,12 @@ const filteredTasks = computed(() => {
       if (task.status && !showCompletedTasks.value) {
         return false // Hide completed tasks when switch is off
       }
+    } else if (props.currentView === 'completed') {
+      // In completed view, show all completed tasks (already filtered by App.vue)
+      return true
+    } else if (props.currentView === 'overdue') {
+      // In overdue view, show all overdue tasks (already filtered by App.vue)
+      return true
     } else {
       // In main view, filter out completed tasks that are older than today
       if (task.status) {
@@ -855,8 +872,8 @@ const filteredTasks = computed(() => {
     return true
   })
   
-  // Apply project filter (only in main view, not in project-specific view)
-  if (selectedProjectFilters.value.length > 0 && props.currentView !== 'project') {
+  // Apply project filter (only in main view, not in project-specific, completed, or overdue view)
+  if (selectedProjectFilters.value.length > 0 && props.currentView !== 'project' && props.currentView !== 'completed' && props.currentView !== 'overdue') {
     tasks = tasks.filter(task => {
       // If task has no project_id, check if "No Project" is selected
       if (!task.project_id) {
@@ -880,8 +897,8 @@ const filteredTasks = computed(() => {
 const filteredAndTabTasks = computed(() => {
   const searchFiltered = filteredTasks.value
   
-  // If in project view, show all tasks for the project without tab filtering
-  if (props.currentView === 'project') {
+  // If in project, completed, or overdue view, show all tasks without tab filtering
+  if (props.currentView === 'project' || props.currentView === 'completed' || props.currentView === 'overdue') {
     return searchFiltered
   }
   
