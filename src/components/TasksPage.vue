@@ -11,7 +11,7 @@
           </h1>
           
           <!-- Project Status Switch -->
-          <div v-if="currentView === 'project' && selectedProject" class="flex items-center gap-3">
+          <div v-if="currentView === 'project' && selectedProject" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
             <div class="flex items-center gap-2">
               <Switch
                 :model-value="selectedProject.status === 'active'"
@@ -24,6 +24,17 @@
                 'text-red-700': selectedProject.status === 'inactive'
               }">
                 {{ selectedProject.status === 'active' ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+            
+            <!-- Show Completed Tasks Switch -->
+            <div class="flex items-center gap-2">
+              <Switch
+                v-model="showCompletedTasks"
+                class="data-[state=checked]:bg-blue-600"
+              />
+              <span class="text-sm font-medium text-muted-foreground">
+                Show Completed
               </span>
             </div>
           </div>
@@ -185,8 +196,8 @@
     <Card>
      
       <CardContent>
-        <!-- Time-based Tabs -->
-        <Tabs v-model="activeTab" class="mb-6">
+        <!-- Time-based Tabs (only show when not in project view) -->
+        <Tabs v-if="currentView !== 'project'" v-model="activeTab" class="mb-6">
           <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1">
             <TabsTrigger value="today" class="flex items-center justify-center gap-1 text-xs sm:text-sm">
               <span class="truncate">Today</span>
@@ -239,7 +250,11 @@
           <div class="text-4xl mb-4">📝</div>
           <h3 class="text-lg font-medium mb-2">No tasks found</h3>
           <p class="text-muted-foreground mb-4">
-            {{ searchQuery ? 'No tasks match your search.' : `No tasks for ${getTabLabel(activeTab)}.` }}
+            {{ searchQuery ? 'No tasks match your search.' : 
+               currentView === 'project' ? 
+                 (showCompletedTasks ? `No tasks in ${selectedProject?.name || 'this project'}.` : 
+                  `No incomplete tasks in ${selectedProject?.name || 'this project'}. Toggle "Show Completed" to see completed tasks.`) :
+               `No tasks for ${getTabLabel(activeTab)}.` }}
           </p>
           <Button v-if="!searchQuery" @click="toggleAddTaskForm">
             <Plus class="mr-2 h-4 w-4" />
@@ -754,6 +769,7 @@ const editForm = ref({
 const showComments = ref(false)
 const selectedTask = ref(null)
 const projectStatusLoading = ref(false)
+const showCompletedTasks = ref(false)
 
 // Platform-aware keyboard shortcut display
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
@@ -821,19 +837,26 @@ const filteredTasks = computed(() => {
   today.setHours(0, 0, 0, 0) // Reset time to start of day for accurate comparison
   
   let tasks = props.tasks.filter(task => {
-    // Filter out completed tasks that are older than today
-    if (task.status) {
-      const taskDate = new Date(task.date)
-      taskDate.setHours(0, 0, 0, 0)
-      if (taskDate < today) {
-        return false // Hide completed tasks older than today
+    // In project view, filter completed tasks based on the switch
+    if (props.currentView === 'project') {
+      if (task.status && !showCompletedTasks.value) {
+        return false // Hide completed tasks when switch is off
+      }
+    } else {
+      // In main view, filter out completed tasks that are older than today
+      if (task.status) {
+        const taskDate = new Date(task.date)
+        taskDate.setHours(0, 0, 0, 0)
+        if (taskDate < today) {
+          return false // Hide completed tasks older than today
+        }
       }
     }
     return true
   })
   
-  // Apply project filter
-  if (selectedProjectFilters.value.length > 0) {
+  // Apply project filter (only in main view, not in project-specific view)
+  if (selectedProjectFilters.value.length > 0 && props.currentView !== 'project') {
     tasks = tasks.filter(task => {
       // If task has no project_id, check if "No Project" is selected
       if (!task.project_id) {
@@ -856,6 +879,13 @@ const filteredTasks = computed(() => {
 
 const filteredAndTabTasks = computed(() => {
   const searchFiltered = filteredTasks.value
+  
+  // If in project view, show all tasks for the project without tab filtering
+  if (props.currentView === 'project') {
+    return searchFiltered
+  }
+  
+  // Otherwise, apply tab filtering
   return getTasksByTab(activeTab.value, searchFiltered)
 })
 
